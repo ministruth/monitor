@@ -92,10 +92,12 @@ jobs:
         shell: bash
         run: |
           make output BUILD_TYPE=release TARGET_DIR=$(pwd)/target/${{ matrix.platform.target }}/release
+          mkdir release
+          mv bin release/plugin-${{ matrix.platform.os_name }}
       - uses: actions/upload-artifact@v4
         with:
           name: plugin-${{ matrix.platform.os_name }}
-          path: bin
+          path: release
           retention-days: 1
   package_plugin:
     needs: build_plugin
