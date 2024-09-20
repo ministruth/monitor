@@ -1,1 +1,1 @@
-../../../common/app.tsx
+./common/app.tsx
