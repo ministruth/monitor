@@ -20,14 +20,31 @@ else
     endif
 endif
 
-.PHONY: static output
+.PHONY: check static output clean help
 
+## check: Check code and style.
+check:
+	@cargo clippy -- -D clippy::all
+	@cargo fmt --all -- --check
+
+## static: Build static files.
 static:
 	@rm -rf $(OUTPUT_DIR)$(STATIC_DIR) && mkdir -p $(OUTPUT_DIR)$(STATIC_DIR)
 	@cd frontend && yarn && yarn build
 	@cp -r frontend/dist/. $(OUTPUT_DIR)$(STATIC_DIR)
 
+## output: Copy build files for production.
 output:
 	@rm -rf $(OUTPUT_DIR)$(BIN_DIR) && mkdir -p $(OUTPUT_DIR)$(BIN_DIR)
 	@cp $(TARGET_DIR)/*$(NAME)$(PLUGIN_SUFFIX) $(OUTPUT_DIR)$(BIN_DIR)
 	@cp config.yml $(OUTPUT_DIR)$(BIN_DIR)
+
+## clean: Clean all build files.
+clean:
+	@rm -rf $(OUTPUT_DIR)
+	@cargo clean
+
+## help: Show this help.
+help: Makefile
+	@echo Usage: make [command]
+	@sed -n 's/^##//p' $< | column -t -s ':' |  sed -e 's/^/ /'
