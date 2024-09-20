@@ -1,1 +1,1 @@
-# skynet-monitor
+# monitor

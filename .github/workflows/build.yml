@@ -73,6 +73,16 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - uses: ilammy/setup-nasm@v1
         if: ${{ matrix.platform.os == 'windows-latest'}}
+      - name: Install Protoc
+        id: protoc-install
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "27.3"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set protoc path
+        shell: bash
+        run: |
+          echo "${{ steps.protoc-install.outputs.path }}" >> $GITHUB_PATH
       - name: Update gcc
         if: ${{ matrix.platform.os == 'ubuntu-20.04'}}
         shell: bash
