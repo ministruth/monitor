@@ -1,0 +1,86 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - "frontend-v*"
+      - "v*"
+
+jobs:
+  build_frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "yarn"
+          cache-dependency-path: "**/yarn.lock"
+      - name: Build assets
+        shell: bash
+        run: |
+          make static
+
+  build_plugin:
+    needs: build_frontend
+    name: Build plugin ${{ matrix.platform.os_name }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      matrix:
+        platform:
+          - os_name: linux-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-linux-gnu
+            bin: skynet
+            name: skynet-linux-x86_64.tar.gz
+          - os_name: linux-i686
+            os: ubuntu-20.04
+            target: i686-unknown-linux-gnu
+            bin: skynet
+            name: skynet-linux-i686.tar.gz
+          - os_name: linux-aarch64
+            os: ubuntu-20.04
+            target: aarch64-unknown-linux-gnu
+            bin: skynet
+            name: skynet-linux-aarch64.tar.gz
+          - os_name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: skynet.exe
+            name: skynet-windows-x86_64.zip
+          - os_name: macOS-x86_64
+            os: macOS-latest
+            target: x86_64-apple-darwin
+            bin: skynet
+            name: skynet-darwin-x86_64.tar.gz
+          - os_name: macOS-aarch64
+            os: macOS-latest
+            target: aarch64-apple-darwin
+            bin: skynet
+            name: skynet-darwin-aarch64.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache cargo & target directories
+        uses: Swatinem/rust-cache@v2
+      - uses: ilammy/setup-nasm@v1
+        if: ${{ matrix.platform.os == 'windows-latest'}}
+      - name: Update gcc
+        if: ${{ matrix.platform.os == 'ubuntu-20.04'}}
+        shell: bash
+        run: |
+          echo "CC=gcc-10" >> $GITHUB_ENV
+          echo "CXX=g++-10" >> $GITHUB_ENV
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: "both"
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          strip: false

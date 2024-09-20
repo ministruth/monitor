@@ -1,0 +1,6 @@
+/target
+/release
+/bin
+.vscode
+.VSCodeCounter
+.DS_Store
