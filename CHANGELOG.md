@@ -1,3 +1,7 @@
+# frontend-dev
+## Bug fix
+1. Fixed a bug that caused loop reload.
+
 # frontend-v0.2.0
 ## Changes
 1. Support i18n for status.
