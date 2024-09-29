@@ -1,4 +1,8 @@
-# frontend-dev
+# v0.3.1
+## Bug fix
+1. Fixed a DoS bug for unauthorized client.
+
+# frontend-v0.2.1
 ## Bug fix
 1. Fixed a bug that caused loop reload.
 

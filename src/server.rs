@@ -40,6 +40,7 @@ use skynet_api_monitor::{CommandRspMessage, FileRspMessage};
 use crate::ws_handler::{ShellError, ShellOutput};
 use crate::{AGENT_API, DB, SERVICE, WEB_ADDRESS};
 
+const MAX_MESSAGE_SIZE: u32 = 1024 * 1024 * 128;
 const AES256_KEY_SIZE: usize = 32;
 const SECRET_KEY_SIZE: usize = 32;
 const MAGIC_NUMBER: &[u8] = b"SKNT";
@@ -95,6 +96,9 @@ impl Frame {
 
     async fn send(&mut self, buf: &[u8]) -> Result<()> {
         let len = buf.len().try_into()?;
+        if len > MAX_MESSAGE_SIZE {
+            return Err(io::Error::from(io::ErrorKind::InvalidData).into());
+        }
         self.stream.write_u32(len).await?;
         self.stream.write_all(buf).await?;
         self.stream.flush().await?;
@@ -116,8 +120,11 @@ impl Frame {
         self.send(&buf).await
     }
 
-    pub async fn read(&mut self) -> Result<Vec<u8>> {
+    pub async fn read(&mut self, limit: u32) -> Result<Vec<u8>> {
         let len = self.len.next(&mut self.stream).await?;
+        if len > limit {
+            return Err(io::Error::from(io::ErrorKind::InvalidData).into());
+        }
         let mut ret = BytesMut::with_capacity(len.try_into()?);
         if self.stream.read_buf(&mut ret).await? == 0 {
             self.len.reset();
@@ -132,7 +139,11 @@ impl Frame {
     /// # Cancel safety
     /// This function is cancellation safe.
     async fn read_msg(&mut self) -> Result<Message> {
-        let buf = self.read().await?;
+        let buf = if self.cipher.is_some() {
+            self.read(MAX_MESSAGE_SIZE).await?
+        } else {
+            self.read(256).await?
+        };
         if let Some(cipher) = &self.cipher {
             let nonce = Nonce::from_slice(&buf[0..12]);
             let buf = cipher.decrypt(nonce, &buf[12..]).map_err(|e| anyhow!(e))?;

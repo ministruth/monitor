@@ -1,6 +1,6 @@
 {
   "name": "skynet-monitor",
-  "version": "1.0.0",
+  "version": "0.2.1",
   "private": true,
   "description": "This plugin provide agent monitor and management for skynet, most other plugins depends on this",
   "author": "MXWXZ <me@imwxz.com>",
