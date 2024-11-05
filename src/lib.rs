@@ -1,21 +1,24 @@
-use migration::migrator::Migrator;
-use skynet_api::{
-    actix_cloud::{
-        self,
-        actix_web::web::{delete, get, post, put},
-        i18n::i18n,
-        router::{CSRFType, Router},
-        state::GlobalState,
-        tokio::runtime::Runtime,
-    },
-    async_trait, create_plugin,
-    parking_lot::RwLock,
-    permission::{IDTypes::PermManagePluginID, PermEntry, PERM_ALL, PERM_READ, PERM_WRITE},
-    plugin::{self, Plugin},
-    request::{MenuItem, PermType},
-    sea_orm::{DatabaseConnection, TransactionTrait},
+use actix_cloud::{
+    self,
+    actix_web::http::Method,
+    async_trait,
+    i18n::i18n,
+    router::CSRFType,
+    state::GlobalState,
+    tokio::runtime::Runtime,
     tracing::{error, info, warn},
-    uuid, HyUuid, Result, Skynet,
+};
+use migration::migrator::Migrator;
+use parking_lot::RwLock;
+use skynet_api::{
+    create_plugin,
+    permission::{
+        IDTypes::PermManagePluginID, PermEntry, PermType, PERM_ALL, PERM_READ, PERM_WRITE,
+    },
+    plugin::{self, Plugin},
+    request::{box_http_router, box_json_router, Router},
+    sea_orm::{DatabaseConnection, TransactionTrait},
+    uuid, HyUuid, MenuItem, Result, Skynet,
 };
 use skynet_api_monitor::{ecies::utils::generate_keypair, Service, ID};
 use std::{
@@ -46,16 +49,13 @@ impl Plugin for Monitor {
     fn on_load(
         &self,
         _: PathBuf,
-        mut skynet: Skynet,
-        mut state: GlobalState,
-    ) -> (Skynet, GlobalState, Result<()>) {
+        mut skynet: Box<Skynet>,
+        mut state: Box<GlobalState>,
+    ) -> (Box<Skynet>, Box<GlobalState>, Result<()>) {
         RUNTIME.set(Runtime::new().unwrap()).unwrap();
         WEB_ADDRESS.set(RwLock::default()).unwrap();
 
-        if let Some(api) = skynet
-            .shared_api
-            .get(&skynet_api_agent::ID, skynet_api_agent::VERSION)
-        {
+        if let Some(api) = skynet.shared_api.get(&skynet_api_agent::ID, "~0.4.0") {
             AGENT_API.set(api).unwrap();
         } else {
             warn!("Agent plugin not enabled, auto update disabled");
@@ -161,77 +161,78 @@ impl Plugin for Monitor {
         r.extend(vec![
             Router {
                 path: format!("/plugins/{ID}/ws"),
-                route: get().to(ws::service),
+                method: Method::GET,
+                route: box_http_router(ws::service),
                 checker: PermType::Entry(PermEntry {
                     pid: SERVICE.get().unwrap().view_id,
                     perm: PERM_ALL,
-                })
-                .into(),
+                }),
                 csrf: CSRFType::ForceParam,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents"),
-                route: get().to(api::get_passive_agents),
+                method: Method::GET,
+                route: box_json_router(api::get_passive_agents),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_READ,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents"),
-                route: post().to(api::add_passive_agents),
+                method: Method::POST,
+                route: box_json_router(api::add_passive_agents),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents"),
-                route: delete().to(api::delete_passive_agents_batch),
+                method: Method::DELETE,
+                route: box_json_router(api::delete_passive_agents_batch),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents/{{paid}}"),
-                route: put().to(api::put_passive_agents),
+                method: Method::PUT,
+                route: box_json_router(api::put_passive_agents),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents/{{paid}}"),
-                route: delete().to(api::delete_passive_agents),
+                method: Method::DELETE,
+                route: box_json_router(api::delete_passive_agents),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents/{{paid}}/activate"),
-                route: post().to(api::activate_passive_agents),
+                method: Method::POST,
+                route: box_json_router(api::activate_passive_agents),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/agents"),
-                route: get().to(api::get_agents),
+                method: Method::GET,
+                route: box_json_router(api::get_agents),
                 checker: PermType::Custom(Box::new(|x| {
                     PermEntry {
                         pid: SERVICE.get().unwrap().view_id,
@@ -243,108 +244,107 @@ impl Plugin for Monitor {
                             perm: PERM_READ,
                         }
                         .check(x)
-                }))
-                .into(),
+                })),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/agents"),
-                route: delete().to(api::delete_agents),
+                method: Method::DELETE,
+                route: box_json_router(api::delete_agents),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/agents/{{aid}}"),
-                route: put().to(api::put_agent),
+                method: Method::PUT,
+                route: box_json_router(api::put_agent),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/agents/{{aid}}"),
-                route: delete().to(api::delete_agent),
+                method: Method::DELETE,
+                route: box_json_router(api::delete_agent),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/agents/{{aid}}/reconnect"),
-                route: post().to(api::reconnect_agent),
+                method: Method::POST,
+                route: box_json_router(api::reconnect_agent),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/settings"),
-                route: get().to(api::get_settings),
+                method: Method::GET,
+                route: box_json_router(api::get_settings),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_READ,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/settings"),
-                route: put().to(api::put_settings),
+                method: Method::PUT,
+                route: box_json_router(api::put_settings),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/settings/shell"),
-                route: get().to(api::get_settings_shell),
+                method: Method::GET,
+                route: box_json_router(api::get_settings_shell),
                 checker: PermType::Entry(PermEntry {
                     pid: SERVICE.get().unwrap().get_view_id(),
                     perm: PERM_READ,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/settings/certificate"),
-                route: get().to(api::get_settings_certificate),
+                method: Method::GET,
+                route: box_http_router(api::get_settings_certificate),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_READ,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/settings/certificate"),
-                route: post().to(api::new_settings_certificate),
+                method: Method::POST,
+                route: box_json_router(api::new_settings_certificate),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
             Router {
                 path: format!("/plugins/{ID}/settings/server"),
-                route: post().to(api::post_server),
+                method: Method::POST,
+                route: box_json_router(api::post_server),
                 checker: PermType::Entry(PermEntry {
                     pid: skynet.default_id[PermManagePluginID],
                     perm: PERM_WRITE,
-                })
-                .into(),
+                }),
                 csrf,
             },
         ]);

@@ -1,18 +1,15 @@
 use actix::{Actor, ActorContext, Addr, AsyncContext, StreamHandler};
+use actix_cloud::{
+    actix_web::{
+        web::{Bytes, Payload},
+        HttpResponse,
+    },
+    response::RspResult,
+    tracing::{debug, Instrument},
+};
 use actix_web_actors::ws::{self, start, ProtocolError, WebsocketContext};
 use derivative::Derivative;
-use skynet_api::{
-    actix_cloud::{
-        actix_web::{
-            web::{Bytes, Payload},
-            Error, HttpRequest, HttpResponse,
-        },
-        bail,
-    },
-    anyhow,
-    tracing::{debug, Instrument},
-    HyUuid, Result,
-};
+use skynet_api::{anyhow, bail, request::Request, HyUuid, Result};
 use skynet_api_monitor::{
     frontend_message::Data, message, prost::Message as _, FrontendMessage, ShellDisconnectMessage,
     ShellErrorMessage,
@@ -139,6 +136,6 @@ impl StreamHandler<Result<ws::Message, ProtocolError>> for WSHandler {
 }
 
 #[plugin_api]
-pub async fn service(req: HttpRequest, payload: Payload) -> Result<HttpResponse, Error> {
-    start(WSHandler::new(), &req, payload)
+pub async fn service(req: Request, payload: Payload) -> RspResult<HttpResponse> {
+    start(WSHandler::new(), &req.http_request, payload).map_err(|x| anyhow!(x.to_string()).into())
 }

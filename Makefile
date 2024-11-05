@@ -42,6 +42,7 @@ output:
 ## clean: Clean all build files.
 clean:
 	@rm -rf $(OUTPUT_DIR)
+	@cd frontend && rm -rf dist && rm -rf node_modules
 	@cargo clean
 
 ## help: Show this help.

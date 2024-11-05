@@ -5,29 +5,28 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use actix::clock::{interval, Instant, Interval};
+use actix_cloud::{
+    async_trait,
+    chrono::{DateTime, Utc},
+    tokio::{
+        io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
+        net::{TcpListener, TcpStream},
+        select, spawn,
+        sync::{
+            broadcast::{channel, Receiver, Sender},
+            mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        },
+        time::sleep,
+    },
+    tracing::{debug, error, field, info, info_span, warn, Instrument, Span},
+};
 use aes_gcm::aead::{Aead, OsRng};
 use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
 use bytes::BytesMut;
 use derivative::Derivative;
 use miniz_oxide::deflate::compress_to_vec;
-use skynet_api::actix_cloud::bail;
-use skynet_api::actix_cloud::chrono::{DateTime, Utc};
-use skynet_api::actix_cloud::tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
-use skynet_api::actix_cloud::tokio::net::{TcpListener, TcpStream};
-use skynet_api::actix_cloud::tokio::sync::broadcast::{channel, Receiver, Sender};
-use skynet_api::actix_cloud::tokio::sync::mpsc::{
-    unbounded_channel, UnboundedReceiver, UnboundedSender,
-};
-use skynet_api::actix_cloud::tokio::time::sleep;
-use skynet_api::actix_cloud::tokio::{select, spawn};
-use skynet_api::request::Condition;
-use skynet_api::{
-    anyhow, async_trait,
-    parking_lot::RwLock,
-    sea_orm::TransactionTrait,
-    tracing::{debug, error, field, info, info_span, warn, Instrument, Span},
-    HyUuid, Result,
-};
+use parking_lot::RwLock;
+use skynet_api::{anyhow, bail, request::Condition, sea_orm::TransactionTrait, HyUuid, Result};
 use skynet_api_monitor::{
     ecies::{self, SecretKey},
     message::Data,
@@ -153,7 +152,7 @@ impl Frame {
             Message::decode(&buf[MAGIC_NUMBER.len()..]).map_err(Into::into)
         } else {
             // handshake
-            let data = ecies::decrypt(&self.sk, &buf)?;
+            let data = ecies::decrypt(&self.sk, &buf).map_err(|e| anyhow!(e))?;
             if data.len() > AES256_KEY_SIZE {
                 let (key, uid) = data.split_at(AES256_KEY_SIZE);
                 self.cipher = Some(Aes256Gcm::new_from_slice(key)?);

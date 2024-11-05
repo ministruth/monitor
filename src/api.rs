@@ -1,26 +1,24 @@
 use core::str;
 use std::{sync::Arc, time::Duration};
 
+use actix_cloud::{
+    actix_web::{web::Path, HttpResponse},
+    response::{JsonResponse, RspResult},
+    tokio::time::sleep,
+    tracing::{error, info, Instrument},
+};
 use actix_web_validator::{Json, QsQuery};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_repr::Serialize_repr;
 use skynet_api::{
-    actix_cloud::{
-        actix_web::{
-            web::{Data, Path},
-            Responder,
-        },
-        response::{JsonResponse, RspResult},
-        tokio::time::sleep,
-    },
     finish,
     request::{
-        unique_validator, Condition, IDsReq, IntoExpr, PageData, PaginationParam, TimeParam,
+        unique_validator, Condition, IDsReq, IntoExpr, PageData, PaginationParam, Request,
+        TimeParam,
     },
     sea_orm::{ColumnTrait, IntoSimpleExpr, TransactionTrait},
-    tracing::{error, info, Instrument},
     HyUuid, Skynet,
 };
 use skynet_api_monitor::{
@@ -45,7 +43,7 @@ pub struct GetAgentsReq {
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn get_agents(param: QsQuery<GetAgentsReq>) -> RspResult<impl Responder> {
+pub async fn get_agents(param: QsQuery<GetAgentsReq>) -> RspResult<JsonResponse> {
     let srv = SERVICE.get().unwrap();
     let data: Vec<serde_json::Value> = srv
         .agent
@@ -88,7 +86,7 @@ pub struct GetPassiveAgentsReq {
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn get_passive_agents(param: QsQuery<GetPassiveAgentsReq>) -> RspResult<impl Responder> {
+pub async fn get_passive_agents(param: QsQuery<GetPassiveAgentsReq>) -> RspResult<JsonResponse> {
     #[derive(Serialize_repr)]
     #[repr(u8)]
     enum Status {
@@ -153,7 +151,7 @@ pub struct AddPassiveAgentsReq {
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn add_passive_agents(param: Json<AddPassiveAgentsReq>) -> RspResult<impl Responder> {
+pub async fn add_passive_agents(param: Json<AddPassiveAgentsReq>) -> RspResult<JsonResponse> {
     let srv = SERVICE.get().unwrap();
     let tx = DB.get().unwrap().begin().await?;
 
@@ -201,9 +199,9 @@ pub struct PutPassiveAgentsReq {
 
 #[plugin_api(RUNTIME)]
 pub async fn put_passive_agents(
-    param: Json<PutPassiveAgentsReq>,
     paid: Path<HyUuid>,
-) -> RspResult<impl Responder> {
+    param: Json<PutPassiveAgentsReq>,
+) -> RspResult<JsonResponse> {
     let tx = DB.get().unwrap().begin().await?;
     let srv = SERVICE.get().unwrap();
     if srv.find_passive_by_id(&tx, &paid).await?.is_none() {
@@ -232,7 +230,7 @@ pub async fn put_passive_agents(
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn activate_passive_agents(paid: Path<HyUuid>) -> RspResult<impl Responder> {
+pub async fn activate_passive_agents(paid: Path<HyUuid>) -> RspResult<JsonResponse> {
     let tx = DB.get().unwrap().begin().await?;
     let srv = SERVICE.get().unwrap();
     if srv.find_passive_by_id(&tx, &paid).await?.is_none() {
@@ -253,7 +251,7 @@ pub async fn activate_passive_agents(paid: Path<HyUuid>) -> RspResult<impl Respo
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn delete_passive_agents_batch(param: Json<IDsReq>) -> RspResult<impl Responder> {
+pub async fn delete_passive_agents_batch(param: Json<IDsReq>) -> RspResult<JsonResponse> {
     let tx = DB.get().unwrap().begin().await?;
     let rows = SERVICE
         .get()
@@ -273,7 +271,7 @@ pub async fn delete_passive_agents_batch(param: Json<IDsReq>) -> RspResult<impl 
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn delete_passive_agents(paid: Path<HyUuid>) -> RspResult<impl Responder> {
+pub async fn delete_passive_agents(paid: Path<HyUuid>) -> RspResult<JsonResponse> {
     let tx = DB.get().unwrap().begin().await?;
     let rows = SERVICE.get().unwrap().delete_passive(&tx, &[*paid]).await?;
     tx.commit().await?;
@@ -287,7 +285,7 @@ pub async fn delete_passive_agents(paid: Path<HyUuid>) -> RspResult<impl Respond
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn get_settings(skynet: Data<Skynet>) -> RspResult<impl Responder> {
+pub async fn get_settings(req: Request) -> RspResult<JsonResponse> {
     #[derive(Serialize)]
     struct Rsp {
         running: bool,
@@ -298,29 +296,29 @@ pub async fn get_settings(skynet: Data<Skynet>) -> RspResult<impl Responder> {
     let srv = SERVICE.get().unwrap();
     finish!(JsonResponse::new(MonitorResponse::Success).json(Rsp {
         running: srv.get_server().is_running(),
-        shell: srv.get_setting_shell(&skynet).unwrap_or_default(),
-        address: srv.get_setting_address(&skynet).unwrap_or_default(),
+        shell: srv.get_setting_shell(&req.skynet).unwrap_or_default(),
+        address: srv.get_setting_address(&req.skynet).unwrap_or_default(),
     }));
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn get_settings_shell(skynet: Data<Skynet>) -> RspResult<impl Responder> {
+pub async fn get_settings_shell(req: Request) -> RspResult<JsonResponse> {
     finish!(JsonResponse::new(MonitorResponse::Success).json(
         SERVICE
             .get()
             .unwrap()
-            .get_setting_shell(&skynet)
+            .get_setting_shell(&req.skynet)
             .unwrap_or_default()
     ));
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn get_settings_certificate(skynet: Data<Skynet>) -> RspResult<impl Responder> {
+pub async fn get_settings_certificate(req: Request) -> RspResult<HttpResponse> {
     let pk = PublicKey::from_secret_key(
         &SERVICE
             .get()
             .unwrap()
-            .get_setting_certificate(&skynet)
+            .get_setting_certificate(&req.skynet)
             .unwrap_or_default(),
     );
     finish!(JsonResponse::file(
@@ -351,14 +349,15 @@ async fn restart_server(max_time: u32, srv: Arc<service::Service>, skynet: &Skyn
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn new_settings_certificate(skynet: Data<Skynet>) -> RspResult<impl Responder> {
+pub async fn new_settings_certificate(req: Request) -> RspResult<JsonResponse> {
     let key = generate_keypair();
     let tx = DB.get().unwrap().begin().await?;
     let srv = SERVICE.get().unwrap();
-    srv.set_setting_certificate(&tx, &skynet, &key.0).await?;
+    srv.set_setting_certificate(&tx, &req.skynet, &key.0)
+        .await?;
     tx.commit().await?;
 
-    restart_server(5, srv.to_owned(), &skynet).await;
+    restart_server(5, srv.to_owned(), &req.skynet).await;
 
     info!(
         success = true,
@@ -374,16 +373,13 @@ pub struct PostServerReq {
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn post_server(
-    param: Json<PostServerReq>,
-    skynet: Data<Skynet>,
-) -> RspResult<impl Responder> {
+pub async fn post_server(req: Request, param: Json<PostServerReq>) -> RspResult<JsonResponse> {
     let srv = SERVICE.get().unwrap();
     let s = srv.get_server();
     if param.start {
         if !s.is_running() {
-            let addr = srv.get_setting_address(&skynet).unwrap_or_default();
-            let key = srv.get_setting_certificate(&skynet).unwrap_or_default();
+            let addr = srv.get_setting_address(&req.skynet).unwrap_or_default();
+            let key = srv.get_setting_certificate(&req.skynet).unwrap_or_default();
             RUNTIME.get().unwrap().spawn(async move {
                 srv.get_server()
                     .start(&addr, key)
@@ -411,22 +407,19 @@ pub struct PutSettingsReq {
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn put_settings(
-    param: Json<PutSettingsReq>,
-    skynet: Data<Skynet>,
-) -> RspResult<impl Responder> {
+pub async fn put_settings(req: Request, param: Json<PutSettingsReq>) -> RspResult<JsonResponse> {
     let tx = DB.get().unwrap().begin().await?;
     let srv = SERVICE.get().unwrap();
     if let Some(x) = &param.shell {
-        srv.set_setting_shell(&tx, &skynet, x).await?;
+        srv.set_setting_shell(&tx, &req.skynet, x).await?;
     }
     if let Some(x) = &param.address {
-        srv.set_setting_address(&tx, &skynet, x).await?;
+        srv.set_setting_address(&tx, &req.skynet, x).await?;
     }
     tx.commit().await?;
 
     if param.address.is_some() {
-        restart_server(5, srv.to_owned(), &skynet).await;
+        restart_server(5, srv.to_owned(), &req.skynet).await;
     }
 
     info!(
@@ -440,7 +433,7 @@ pub async fn put_settings(
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn reconnect_agent(aid: Path<HyUuid>) -> RspResult<impl Responder> {
+pub async fn reconnect_agent(aid: Path<HyUuid>) -> RspResult<JsonResponse> {
     if let Some(agent) = SERVICE.get().unwrap().agent.read().get(&aid) {
         if let Some(x) = &agent.message {
             x.send(skynet_api_monitor::message::Data::Reconnect(
@@ -466,7 +459,7 @@ pub struct PutAgentsReq {
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn put_agent(param: Json<PutAgentsReq>, aid: Path<HyUuid>) -> RspResult<impl Responder> {
+pub async fn put_agent(aid: Path<HyUuid>, param: Json<PutAgentsReq>) -> RspResult<JsonResponse> {
     let srv = SERVICE.get().unwrap();
     if !srv.agent_exist(&aid) {
         finish!(JsonResponse::not_found());
@@ -490,7 +483,7 @@ pub async fn put_agent(param: Json<PutAgentsReq>, aid: Path<HyUuid>) -> RspResul
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn delete_agent(aid: Path<HyUuid>) -> RspResult<impl Responder> {
+pub async fn delete_agent(aid: Path<HyUuid>) -> RspResult<JsonResponse> {
     let srv = SERVICE.get().unwrap();
     if !srv.agent_exist(&aid) {
         finish!(JsonResponse::not_found());
@@ -510,7 +503,7 @@ pub async fn delete_agent(aid: Path<HyUuid>) -> RspResult<impl Responder> {
 }
 
 #[plugin_api(RUNTIME)]
-pub async fn delete_agents(param: Json<IDsReq>) -> RspResult<impl Responder> {
+pub async fn delete_agents(param: Json<IDsReq>) -> RspResult<JsonResponse> {
     let srv = SERVICE.get().unwrap();
     let tx = DB.get().unwrap().begin().await?;
     let mut rows = 0;

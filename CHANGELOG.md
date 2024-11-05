@@ -1,3 +1,7 @@
+# v0.4.0
+## Changes
+1. Dependency upgrade, `skynet_api` version 0.2.
+
 # v0.3.1
 ## Bug fix
 1. Fixed a DoS bug for unauthorized client.
