@@ -55,7 +55,7 @@ impl Plugin for Monitor {
         RUNTIME.set(Runtime::new().unwrap()).unwrap();
         WEB_ADDRESS.set(RwLock::default()).unwrap();
 
-        if let Some(api) = skynet.shared_api.get(&skynet_api_agent::ID, skynet_api_agent::VERSION) {
+        if let Some(api) = skynet.shared_api.get(&skynet_api_agent::ID, "~0.4.0") {
             AGENT_API.set(api).unwrap();
         } else {
             warn!("Agent plugin not enabled, auto update disabled");
