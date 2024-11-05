@@ -35,7 +35,7 @@ mod ws;
 mod ws_handler;
 
 include!(concat!(env!("OUT_DIR"), "/response.rs"));
-static AGENT_API: OnceLock<Arc<skynet_api_agent::Service>> = OnceLock::new();
+static AGENT_API: OnceLock<Arc<Box<Arc<skynet_api_agent::Service>>>> = OnceLock::new();
 static SERVICE: OnceLock<Arc<service::Service>> = OnceLock::new();
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 static DB: OnceLock<DatabaseConnection> = OnceLock::new();

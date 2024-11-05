@@ -842,9 +842,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.1.34"
+version = "1.1.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67b9470d453346108f93a59222a9a1a5724db32d0a4727b7ab7ace4b4d822dc9"
+checksum = "0f57c4b4da2a9d619dd035f27316d7a426305b75be93d09e92f2b9229c34feaf"
 dependencies = [
  "jobserver",
  "libc",
@@ -3689,9 +3689,9 @@ checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 
 [[package]]
 name = "skynet_api"
-version = "0.2.8"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "751ac33f0ba95fb18c8e40e1cee2b8e23ad36dbd537c69dfb1a41bb9ee236ea7"
+checksum = "b667c1914b4e19b6e041a52d79eeff11b68d65a6cfe9134d3ad8405127f9a170"
 dependencies = [
  "actix-cloud",
  "actix-cloud-codegen",
@@ -3747,9 +3747,9 @@ dependencies = [
 
 [[package]]
 name = "skynet_macro"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a02e90fd18f500f67c638d146e41df25290a59e93e1eff26d83566bf3188c7a6"
+checksum = "536209336ee6e3f77f8783549bc080ede38dab1c79018d056b8df99cd1218bf1"
 dependencies = [
  "quote",
  "syn 2.0.87",
