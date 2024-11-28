@@ -1,3 +1,7 @@
+# v0.5.0
+## Changes
+1. Dependency upgrade, `skynet_api` version 0.3.
+
 # v0.4.0
 ## Changes
 1. Dependency upgrade, `skynet_api` version 0.2.

@@ -30,8 +30,8 @@ check:
 ## static: Build static files.
 static:
 	@rm -rf $(OUTPUT_DIR)$(STATIC_DIR) && mkdir -p $(OUTPUT_DIR)$(STATIC_DIR)
-	@cd frontend && yarn && yarn build
-	@cp -r frontend/dist/. $(OUTPUT_DIR)$(STATIC_DIR)
+	@cd monitor/frontend && yarn && yarn build
+	@cp -r monitor/frontend/dist/. $(OUTPUT_DIR)$(STATIC_DIR)
 
 ## output: Copy build files for production.
 output:
@@ -42,7 +42,7 @@ output:
 ## clean: Clean all build files.
 clean:
 	@rm -rf $(OUTPUT_DIR)
-	@cd frontend && rm -rf dist && rm -rf node_modules
+	@cd monitor/frontend && rm -rf dist && rm -rf node_modules
 	@cargo clean
 
 ## help: Show this help.

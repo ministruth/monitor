@@ -19,6 +19,13 @@ jobs:
       prefix: plugin
       upload: true
 
+  publish_crate:
+    needs: build_plugin
+    uses: ministruth/.github/.github/workflows/publish.yml@main
+    secrets: inherit
+    with:
+      dir: monitor_api
+
   release:
     needs: [build_static, build_plugin]
     uses: ministruth/.github/.github/workflows/release.yml@main

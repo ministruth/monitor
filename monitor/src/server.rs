@@ -1,12 +1,11 @@
-use std::collections::HashSet;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use std::{collections::HashSet, mem};
 
 use actix::clock::{interval, Instant, Interval};
 use actix_cloud::{
-    async_trait,
     chrono::{DateTime, Utc},
     tokio::{
         io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
@@ -22,22 +21,22 @@ use actix_cloud::{
 };
 use aes_gcm::aead::{Aead, OsRng};
 use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
-use bytes::BytesMut;
 use derivative::Derivative;
+use ecies::SecretKey;
 use miniz_oxide::deflate::compress_to_vec;
 use parking_lot::RwLock;
-use skynet_api::{anyhow, bail, request::Condition, sea_orm::TransactionTrait, HyUuid, Result};
-use skynet_api_monitor::{
-    ecies::{self, SecretKey},
-    message::Data,
-    prost::Message as _,
-    AgentStatus, HandshakeReqMessage, HandshakeRspMessage, HandshakeStatus, InfoMessage, Message,
-    StatusReqMessage, StatusRspMessage, UpdateMessage, ID,
+use skynet_api::{
+    anyhow::anyhow, bail, ffi_rpc::registry::Registry, request::Condition,
+    sea_orm::TransactionTrait, HyUuid, Result,
 };
-use skynet_api_monitor::{CommandRspMessage, FileRspMessage};
+use skynet_api_monitor::{
+    frontend_message, message::Data, prost::Message as _,
+    viewer::passive_agents::PassiveAgentViewer, AgentStatus, CommandRspMessage, FileRspMessage,
+    FrontendMessage, HandshakeReqMessage, HandshakeRspMessage, HandshakeStatus, InfoMessage,
+    Message, StatusReqMessage, StatusRspMessage, UpdateMessage, ID,
+};
 
-use crate::ws_handler::{ShellError, ShellOutput};
-use crate::{AGENT_API, DB, SERVICE, WEB_ADDRESS};
+use crate::PLUGIN_INSTANCE;
 
 const MAX_MESSAGE_SIZE: u32 = 1024 * 1024 * 128;
 const AES256_KEY_SIZE: usize = 32;
@@ -48,27 +47,75 @@ const MAGIC_NUMBER: &[u8] = b"SKNT";
 #[derivative(Default(new = "true"))]
 struct FrameLen {
     data: [u8; 4],
-    len: usize,
+    consumed: usize,
 }
 
 impl FrameLen {
-    async fn next<R>(&mut self, io: &mut R) -> Result<u32>
+    async fn read<R>(&mut self, io: &mut R) -> Result<u32>
     where
         R: AsyncRead + Unpin,
     {
-        while self.len < 4 {
-            let cnt = io.read(&mut self.data[self.len..]).await?;
+        while self.consumed < 4 {
+            let cnt = match io.read(&mut self.data[self.consumed..]).await {
+                Ok(x) => x,
+                Err(e) => {
+                    self.consumed = 0;
+                    return Err(e.into());
+                }
+            };
             if cnt == 0 {
-                self.len = 0;
+                self.consumed = 0;
                 return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
             }
-            self.len += cnt;
+            self.consumed += cnt;
         }
         Ok(u32::from_be_bytes(self.data))
     }
 
     fn reset(&mut self) {
-        self.len = 0;
+        self.consumed = 0;
+    }
+}
+
+#[derive(Derivative)]
+#[derivative(Default(new = "true"))]
+struct FrameData {
+    data: Vec<u8>,
+    len: usize,
+    consumed: usize,
+}
+
+impl FrameData {
+    fn resize(&mut self, len: u32) {
+        let len: usize = len.try_into().unwrap();
+        self.data.resize(len, 0);
+        self.len = len;
+    }
+
+    async fn read<R>(&mut self, io: &mut R) -> Result<()>
+    where
+        R: AsyncRead + Unpin,
+    {
+        while self.consumed < self.len {
+            let cnt = match io.read(&mut self.data[self.consumed..]).await {
+                Ok(x) => x,
+                Err(e) => {
+                    self.consumed = 0;
+                    return Err(e.into());
+                }
+            };
+            if cnt == 0 {
+                self.consumed = 0;
+                return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+            }
+            self.consumed += cnt;
+        }
+        Ok(())
+    }
+
+    fn reset(&mut self) -> Vec<u8> {
+        self.consumed = 0;
+        mem::take(&mut self.data)
     }
 }
 
@@ -76,6 +123,7 @@ struct Frame {
     stream: TcpStream,
     cipher: Option<Aes256Gcm>,
     sk: [u8; SECRET_KEY_SIZE],
+    data: FrameData,
     len: FrameLen,
 }
 
@@ -85,6 +133,7 @@ impl Frame {
             stream,
             cipher: None,
             sk: sk.serialize(),
+            data: FrameData::new(),
             len: FrameLen::new(),
         }
     }
@@ -120,17 +169,16 @@ impl Frame {
     }
 
     pub async fn read(&mut self, limit: u32) -> Result<Vec<u8>> {
-        let len = self.len.next(&mut self.stream).await?;
+        let len = self.len.read(&mut self.stream).await?;
         if len > limit {
+            self.len.reset();
             return Err(io::Error::from(io::ErrorKind::InvalidData).into());
         }
-        let mut ret = BytesMut::with_capacity(len.try_into()?);
-        if self.stream.read_buf(&mut ret).await? == 0 {
-            self.len.reset();
-            return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
-        }
+        self.data.resize(len);
+        let r = self.data.read(&mut self.stream).await;
         self.len.reset();
-        Ok(ret.into())
+        r?;
+        Ok(self.data.reset())
     }
 
     /// Read message from frame.
@@ -208,12 +256,10 @@ impl Handler {
     async fn handshake(&mut self, frame: &mut Frame, msg: Message) -> Result<()> {
         if msg.seq == 0 && self.client_seq == 0 {
             if let Some(Data::HandshakeReq(data)) = msg.data {
-                let tx = DB.get().unwrap().begin().await?;
+                let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
                 self.aid = Some(
-                    if let Some(x) = SERVICE
-                        .get()
-                        .unwrap()
-                        .login(&tx, data.uid, self.client_addr)
+                    if let Some(x) = PLUGIN_INSTANCE
+                        .login(&tx, &data.uid, &self.client_addr)
                         .await?
                     {
                         x
@@ -231,7 +277,7 @@ impl Handler {
                 );
                 tx.commit().await?;
 
-                self.message = Some(SERVICE.get().unwrap().bind_message(&self.aid.unwrap()));
+                self.message = Some(PLUGIN_INSTANCE.bind_message(&self.aid.unwrap()));
                 Span::current().record("aid", self.aid.unwrap().to_string());
                 self.start_time = Utc::now();
                 info!(
@@ -252,10 +298,7 @@ impl Handler {
     }
 
     fn handle_status(&mut self, _frame: &mut Frame, data: StatusRspMessage) -> Result<()> {
-        SERVICE
-            .get()
-            .unwrap()
-            .update_status(&self.aid.unwrap(), data);
+        PLUGIN_INSTANCE.update_status(&self.aid.unwrap(), data);
         Ok(())
     }
 
@@ -269,15 +312,12 @@ impl Handler {
             self.status_clock = Some(interval(Duration::from_secs(data.report_rate.into())));
         }
 
-        let tx = DB.get().unwrap().begin().await?;
-        SERVICE
-            .get()
-            .unwrap()
-            .update(&tx, &self.aid.unwrap(), data)
+        PLUGIN_INSTANCE
+            .update_agent(PLUGIN_INSTANCE.db.get().unwrap(), &self.aid.unwrap(), data)
             .await?;
-        tx.commit().await?;
-        if let Some(x) = AGENT_API.get() {
-            if AGENT_API.get().unwrap().check_version(&version) {
+        if let Some(x) = PLUGIN_INSTANCE.agent_api.get() {
+            if x.check_version(&Registry::default(), &version).await {
+                info!(agent_version = version, "Updating agent");
                 let sys = skynet_api_agent::System::parse(&sys);
                 let arch = skynet_api_agent::Arch::parse(&arch);
                 if sys.is_none() || arch.is_none() {
@@ -288,8 +328,11 @@ impl Handler {
                     );
                 }
 
-                if let Some(data) = x.get_binary(sys.unwrap(), arch.unwrap()) {
-                    if let Some(x) = SERVICE.get().unwrap().agent.write().get_mut(&aid) {
+                if let Some(data) = x
+                    .get_binary(&Registry::default(), &sys.unwrap(), &arch.unwrap())
+                    .await
+                {
+                    if let Some(mut x) = PLUGIN_INSTANCE.agent.get_mut(&aid) {
                         x.status = AgentStatus::Updating;
                     }
                     let crc = crc32fast::hash(&data);
@@ -300,8 +343,11 @@ impl Handler {
                         )
                         .await?;
                 } else {
+                    let file = x
+                        .get_binary_name(&Registry::default(), &sys.unwrap(), &arch.unwrap())
+                        .await;
                     warn!(
-                        file = %x.get_binary_name(sys.unwrap(), arch.unwrap()).to_string_lossy(),
+                        file = %file.to_string_lossy(),
                         "Agent not update, file not found",
                     );
                 }
@@ -311,7 +357,7 @@ impl Handler {
     }
 
     fn handle_file(&mut self, _frame: &mut Frame, data: FileRspMessage) -> Result<()> {
-        SERVICE.get().unwrap().update_file_response(
+        PLUGIN_INSTANCE.update_file_response(
             &self.aid.unwrap(),
             &HyUuid::parse(&data.id)?,
             data.code,
@@ -321,7 +367,7 @@ impl Handler {
     }
 
     fn handle_command(&mut self, _frame: &mut Frame, data: CommandRspMessage) -> Result<()> {
-        SERVICE.get().unwrap().update_command_output(
+        PLUGIN_INSTANCE.update_command_output(
             &self.aid.unwrap(),
             &HyUuid::parse(&data.id)?,
             data.code,
@@ -347,16 +393,30 @@ impl Handler {
                     Data::ShellOutput(mut data) => {
                         let id = HyUuid::parse(&data.token.unwrap_or_default())?;
                         data.token = None;
-                        if let Some(addr) = WEB_ADDRESS.get().unwrap().read().get(&id) {
-                            addr.do_send(ShellOutput { data });
+                        if let Some(id) = PLUGIN_INSTANCE.shell_binding.get(&id) {
+                            if let Some(inst) = PLUGIN_INSTANCE.shell.get(&id) {
+                                let _ = inst
+                                    .send(FrontendMessage {
+                                        id: None,
+                                        data: Some(frontend_message::Data::ShellOutput(data)),
+                                    })
+                                    .await;
+                            }
                         }
                         Ok(())
                     }
                     Data::ShellError(mut data) => {
                         let id = HyUuid::parse(&data.token.unwrap_or_default())?;
                         data.token = None;
-                        if let Some(addr) = WEB_ADDRESS.get().unwrap().read().get(&id) {
-                            addr.do_send(ShellError { data });
+                        if let Some(id) = PLUGIN_INSTANCE.shell_binding.get(&id) {
+                            if let Some(inst) = PLUGIN_INSTANCE.shell.get(&id) {
+                                let _ = inst
+                                    .send(FrontendMessage {
+                                        id: None,
+                                        data: Some(frontend_message::Data::ShellError(data)),
+                                    })
+                                    .await;
+                            }
                         }
                         Ok(())
                     }
@@ -438,7 +498,7 @@ impl Handler {
         }
         self.status_clock = None;
         if let Some(aid) = self.aid {
-            SERVICE.get().unwrap().logout(&aid);
+            PLUGIN_INSTANCE.logout(&aid);
             self.message = None;
         }
     }
@@ -481,13 +541,8 @@ impl Listener {
 
     async fn passive_loop(key: SecretKey, rx: Receiver<()>, apid: HyUuid) -> Result<()> {
         loop {
-            let tx = DB.get().unwrap().begin().await?;
-            let m = SERVICE
-                .get()
-                .unwrap()
-                .find_passive_by_id(&tx, &apid)
-                .await?;
-            tx.commit().await?;
+            let m =
+                PassiveAgentViewer::find_by_id(PLUGIN_INSTANCE.db.get().unwrap(), &apid).await?;
             if let Some(m) = m {
                 if let Err(e) = Self::passive(&m.address, key, rx.resubscribe()).await {
                     error!(plugin = %ID, error = %e, apid = %apid, address = m.address, "Monitor connect error");
@@ -549,9 +604,8 @@ pub struct Server {
     shutdown_tx: RwLock<Option<Sender<()>>>,
 }
 
-#[async_trait]
-impl skynet_api_monitor::Server for Server {
-    async fn start(&self, addr: &str, key: SecretKey) -> Result<()> {
+impl Server {
+    pub async fn start(&self, addr: &str, key: SecretKey) -> Result<()> {
         let (tx, mut rx) = channel(1);
         let (passive_tx, passive_rx) = unbounded_channel();
         let mut listener =
@@ -560,14 +614,12 @@ impl skynet_api_monitor::Server for Server {
         *self.shutdown_tx.write() = Some(tx);
         *self.running.write() = true;
 
-        let tx = DB.get().unwrap().begin().await?;
-        let passive = SERVICE
-            .get()
-            .unwrap()
-            .find_passive(&tx, Condition::new(Condition::all()))
-            .await?
-            .0;
-        tx.commit().await?;
+        let passive = PassiveAgentViewer::find(
+            PLUGIN_INSTANCE.db.get().unwrap(),
+            Condition::new(Condition::all()),
+        )
+        .await?
+        .0;
         for i in passive {
             self.connect(&i.id);
         }
@@ -584,25 +636,29 @@ impl skynet_api_monitor::Server for Server {
         Ok(())
     }
 
-    fn is_running(&self) -> bool {
+    pub fn is_running(&self) -> bool {
         *self.running.read()
     }
 
-    fn stop(&self) -> bool {
+    pub fn stop(&self) -> bool {
         self.shutdown_tx
             .read()
             .as_ref()
             .is_some_and(|x| x.send(()).is_ok())
     }
 
-    fn connect(&self, apid: &HyUuid) -> bool {
-        self.passive_channel
-            .read()
-            .as_ref()
-            .is_some_and(|x| x.send(*apid).is_ok())
+    pub fn connect(&self, apid: &HyUuid) -> bool {
+        if !self.connecting().contains(apid) {
+            self.passive_channel
+                .read()
+                .as_ref()
+                .is_some_and(|x| x.send(*apid).is_ok())
+        } else {
+            true
+        }
     }
 
-    fn connecting(&self) -> Vec<HyUuid> {
+    pub fn connecting(&self) -> Vec<HyUuid> {
         self.passive_agent
             .read()
             .iter()

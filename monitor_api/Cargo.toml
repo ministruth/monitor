@@ -1,0 +1,37 @@
+[package]
+name = "skynet_api_monitor"
+version = "0.5.1"
+edition = "2021"
+authors = ["MXWXZ <matrixwxz@gmail.com>"]
+description = "API for Skynet monitor plugin."
+license = "GPL-3.0"
+repository = "https://github.com/ministruth/monitor"
+keywords = ["framework", "api", "ffi", "plugin"]
+categories = ["api-bindings", "external-ffi-bindings"]
+
+[dependencies]
+derivative = "2.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_repr = "0.1"
+enum-as-inner = "0.6"
+prost = "0.13"
+actix-cloud = { version = "0.4", default-features = false, features = [
+    "macros",
+    "utils",
+    "seaorm",
+    "chrono",
+    "tokio",
+] }
+ffi_rpc = "0.5"
+semver = { version = "1.0", features = ["serde"] }
+
+skynet_api = { version = "0.3", features = [
+    "database",
+    "request-condition",
+    "service-result",
+] }
+skynet_macro = "0.3"
+
+[build-dependencies]
+prost-build = "0.13"
+walkdir = "2.5"

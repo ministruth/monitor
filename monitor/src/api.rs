@@ -1,35 +1,35 @@
 use core::str;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use actix_cloud::{
     actix_web::{web::Path, HttpResponse},
     response::{JsonResponse, RspResult},
     tokio::time::sleep,
-    tracing::{error, info, Instrument},
+    tracing::{error, info},
 };
 use actix_web_validator::{Json, QsQuery};
 use base64::{engine::general_purpose::STANDARD, Engine};
+use ecies::{utils::generate_keypair, PublicKey};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_repr::Serialize_repr;
 use skynet_api::{
     finish,
     request::{
-        unique_validator, Condition, IDsReq, IntoExpr, PageData, PaginationParam, Request,
-        TimeParam,
+        unique_validator, Condition, IDsReq, IntoExpr, PageData, PaginationParam, TimeParam,
     },
     sea_orm::{ColumnTrait, IntoSimpleExpr, TransactionTrait},
-    HyUuid, Skynet,
+    HyUuid, Result,
 };
 use skynet_api_monitor::{
-    ecies::{utils::generate_keypair, PublicKey},
     entity::passive_agents,
-    AgentStatus, ReconnectMessage, Service, ID,
+    viewer::{agents::AgentViewer, passive_agents::PassiveAgentViewer},
+    AgentStatus, ReconnectMessage,
 };
-use skynet_macro::{common_req, plugin_api};
+use skynet_macro::common_req;
 use validator::Validate;
 
-use crate::{service, MonitorResponse, DB, RUNTIME, SERVICE};
+use crate::{MonitorResponse, Plugin, PLUGIN_INSTANCE};
 
 #[derive(Debug, Validate, Deserialize)]
 pub struct GetAgentsReq {
@@ -42,14 +42,11 @@ pub struct GetAgentsReq {
     page: PaginationParam,
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn get_agents(param: QsQuery<GetAgentsReq>) -> RspResult<JsonResponse> {
-    let srv = SERVICE.get().unwrap();
-    let data: Vec<serde_json::Value> = srv
+    let data: Vec<serde_json::Value> = PLUGIN_INSTANCE
         .agent
-        .read()
         .iter()
-        .filter(|(_, v)| {
+        .filter(|v| {
             if let Some(x) = &param.status {
                 if !x.contains(&v.status) {
                     return false;
@@ -67,7 +64,7 @@ pub async fn get_agents(param: QsQuery<GetAgentsReq>) -> RspResult<JsonResponse>
             }
             true
         })
-        .map(|x| json!(x.1))
+        .map(|x| json!(x.value()))
         .collect();
     finish!(JsonResponse::new(MonitorResponse::Success).json(param.page.split(data)));
 }
@@ -85,7 +82,6 @@ pub struct GetPassiveAgentsReq {
     pub time: TimeParam,
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn get_passive_agents(param: QsQuery<GetPassiveAgentsReq>) -> RspResult<JsonResponse> {
     #[derive(Serialize_repr)]
     #[repr(u8)]
@@ -112,11 +108,8 @@ pub async fn get_passive_agents(param: QsQuery<GetPassiveAgentsReq>) -> RspResul
                 .add(text.like_expr(passive_agents::Column::Address)),
         );
     }
-    let srv = SERVICE.get().unwrap();
-    let tx = DB.get().unwrap().begin().await?;
-    let data = srv.find_passive(&tx, cond).await?;
-    tx.commit().await?;
-    let agent = srv.get_server().connecting();
+    let data = PassiveAgentViewer::find(PLUGIN_INSTANCE.db.get().unwrap(), cond).await?;
+    let agent = PLUGIN_INSTANCE.server.connecting();
     let data = (
         data.0
             .into_iter()
@@ -150,35 +143,26 @@ pub struct AddPassiveAgentsReq {
     pub retry_time: i32,
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn add_passive_agents(param: Json<AddPassiveAgentsReq>) -> RspResult<JsonResponse> {
-    let srv = SERVICE.get().unwrap();
-    let tx = DB.get().unwrap().begin().await?;
-
-    if srv
-        .find_passive_by_name(&tx, &param.address)
+    let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
+    if PassiveAgentViewer::find_by_name(&tx, &param.address)
         .await?
         .is_some()
     {
         finish!(JsonResponse::new(MonitorResponse::PassiveAgentNameExist));
     }
-    if srv
-        .find_passive_by_address(&tx, &param.address)
+    if PassiveAgentViewer::find_by_address(&tx, &param.address)
         .await?
         .is_some()
     {
         finish!(JsonResponse::new(MonitorResponse::PassiveAgentAddressExist));
     }
-
-    let m = srv
-        .create_passive(&tx, &param.name, &param.address, param.retry_time)
-        .await?;
+    let m = PassiveAgentViewer::create(&tx, &param.name, &param.address, param.retry_time).await?;
     tx.commit().await?;
-    srv.server.connect(&m.id);
+    PLUGIN_INSTANCE.server.connect(&m.id);
 
     info!(
         success = true,
-        plugin = %ID,
         name = param.name,
         address = param.address,
         retry_time = param.retry_time,
@@ -197,17 +181,15 @@ pub struct PutPassiveAgentsReq {
     pub retry_time: Option<i32>,
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn put_passive_agents(
     paid: Path<HyUuid>,
     param: Json<PutPassiveAgentsReq>,
 ) -> RspResult<JsonResponse> {
-    let tx = DB.get().unwrap().begin().await?;
-    let srv = SERVICE.get().unwrap();
-    if srv.find_passive_by_id(&tx, &paid).await?.is_none() {
+    let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
+    if PassiveAgentViewer::find_by_id(&tx, &paid).await?.is_none() {
         finish!(JsonResponse::not_found());
     }
-    srv.update_passive(
+    PassiveAgentViewer::update(
         &tx,
         &paid,
         param.name.as_deref(),
@@ -219,7 +201,6 @@ pub async fn put_passive_agents(
 
     info!(
         success = true,
-        plugin = %ID,
         paid = %paid,
         name = ?param.name,
         address = ?param.address,
@@ -229,40 +210,28 @@ pub async fn put_passive_agents(
     finish!(JsonResponse::new(MonitorResponse::Success))
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn activate_passive_agents(paid: Path<HyUuid>) -> RspResult<JsonResponse> {
-    let tx = DB.get().unwrap().begin().await?;
-    let srv = SERVICE.get().unwrap();
-    if srv.find_passive_by_id(&tx, &paid).await?.is_none() {
+    if PassiveAgentViewer::find_by_id(PLUGIN_INSTANCE.db.get().unwrap(), &paid)
+        .await?
+        .is_none()
+    {
         finish!(JsonResponse::not_found());
     }
-    tx.commit().await?;
-    if !srv.get_server().connecting().contains(&paid) {
-        srv.server.connect(&paid);
-    }
+    PLUGIN_INSTANCE.server.connect(&paid);
 
     info!(
         success = true,
-        plugin = %ID,
         paid = %paid,
         "Activate passive agent",
     );
     finish!(JsonResponse::new(MonitorResponse::Success))
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn delete_passive_agents_batch(param: Json<IDsReq>) -> RspResult<JsonResponse> {
-    let tx = DB.get().unwrap().begin().await?;
-    let rows = SERVICE
-        .get()
-        .unwrap()
-        .delete_passive(&tx, &param.id)
-        .await?;
-    tx.commit().await?;
+    let rows = PassiveAgentViewer::delete(PLUGIN_INSTANCE.db.get().unwrap(), &param.id).await?;
     if rows != 0 {
         info!(
             success = true,
-            plugin = %ID,
             paid = ?param.id,
             "Delete passive agents",
         );
@@ -270,22 +239,17 @@ pub async fn delete_passive_agents_batch(param: Json<IDsReq>) -> RspResult<JsonR
     finish!(JsonResponse::new(MonitorResponse::Success).json(rows));
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn delete_passive_agents(paid: Path<HyUuid>) -> RspResult<JsonResponse> {
-    let tx = DB.get().unwrap().begin().await?;
-    let rows = SERVICE.get().unwrap().delete_passive(&tx, &[*paid]).await?;
-    tx.commit().await?;
+    let rows = PassiveAgentViewer::delete(PLUGIN_INSTANCE.db.get().unwrap(), &[*paid]).await?;
     info!(
         success = true,
-        plugin = %ID,
         paid = %paid,
         "Delete passive agent",
     );
     finish!(JsonResponse::new(MonitorResponse::Success).json(rows));
 }
 
-#[plugin_api(RUNTIME)]
-pub async fn get_settings(req: Request) -> RspResult<JsonResponse> {
+pub async fn get_settings() -> RspResult<JsonResponse> {
     #[derive(Serialize)]
     struct Rsp {
         running: bool,
@@ -293,32 +257,26 @@ pub async fn get_settings(req: Request) -> RspResult<JsonResponse> {
         address: String,
     }
 
-    let srv = SERVICE.get().unwrap();
+    let db = PLUGIN_INSTANCE.db.get().unwrap();
     finish!(JsonResponse::new(MonitorResponse::Success).json(Rsp {
-        running: srv.get_server().is_running(),
-        shell: srv.get_setting_shell(&req.skynet).unwrap_or_default(),
-        address: srv.get_setting_address(&req.skynet).unwrap_or_default(),
+        running: PLUGIN_INSTANCE.server.is_running(),
+        shell: Plugin::get_setting_shell(db).await?.unwrap_or_default(),
+        address: Plugin::get_setting_address(db).await?.unwrap_or_default(),
     }));
 }
 
-#[plugin_api(RUNTIME)]
-pub async fn get_settings_shell(req: Request) -> RspResult<JsonResponse> {
+pub async fn get_settings_shell() -> RspResult<JsonResponse> {
     finish!(JsonResponse::new(MonitorResponse::Success).json(
-        SERVICE
-            .get()
-            .unwrap()
-            .get_setting_shell(&req.skynet)
+        Plugin::get_setting_shell(PLUGIN_INSTANCE.db.get().unwrap())
+            .await?
             .unwrap_or_default()
     ));
 }
 
-#[plugin_api(RUNTIME)]
-pub async fn get_settings_certificate(req: Request) -> RspResult<HttpResponse> {
+pub async fn get_settings_certificate() -> RspResult<HttpResponse> {
     let pk = PublicKey::from_secret_key(
-        &SERVICE
-            .get()
-            .unwrap()
-            .get_setting_certificate(&req.skynet)
+        &Plugin::get_setting_certificate(PLUGIN_INSTANCE.db.get().unwrap())
+            .await?
             .unwrap_or_default(),
     );
     finish!(JsonResponse::file(
@@ -327,43 +285,39 @@ pub async fn get_settings_certificate(req: Request) -> RspResult<HttpResponse> {
     ))
 }
 
-async fn restart_server(max_time: u32, srv: Arc<service::Service>, skynet: &Skynet) {
-    let addr = srv.get_setting_address(skynet).unwrap_or_default();
-    let key = srv.get_setting_certificate(skynet).unwrap_or_default();
-    let server = srv.get_server();
-    server.stop();
+async fn restart_server(max_time: u32) -> Result<()> {
+    let db = PLUGIN_INSTANCE.db.get().unwrap();
+    let addr = Plugin::get_setting_address(db).await?.unwrap_or_default();
+    let key = Plugin::get_setting_certificate(db)
+        .await?
+        .unwrap_or_default();
+    let srv = &PLUGIN_INSTANCE.server;
+    srv.stop();
     for _ in 0..max_time {
-        if !server.is_running() {
+        if !srv.is_running() {
             break;
         }
         sleep(Duration::from_secs(1)).await;
     }
-    if !server.is_running() {
-        RUNTIME.get().unwrap().spawn(async move {
-            srv.get_server()
-                .start(&addr, key)
+    if !srv.is_running() {
+        PLUGIN_INSTANCE.runtime.spawn(async move {
+            srv.start(&addr, key)
                 .await
                 .map_err(|e| error!(address=addr, error=%e, "Failed to start server"))
         });
     }
+    Ok(())
 }
 
-#[plugin_api(RUNTIME)]
-pub async fn new_settings_certificate(req: Request) -> RspResult<JsonResponse> {
+pub async fn new_settings_certificate() -> RspResult<JsonResponse> {
     let key = generate_keypair();
-    let tx = DB.get().unwrap().begin().await?;
-    let srv = SERVICE.get().unwrap();
-    srv.set_setting_certificate(&tx, &req.skynet, &key.0)
-        .await?;
+    let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
+    Plugin::set_setting_certificate(&tx, &key.0).await?;
     tx.commit().await?;
 
-    restart_server(5, srv.to_owned(), &req.skynet).await;
+    restart_server(5).await?;
 
-    info!(
-        success = true,
-        plugin = %ID,
-        "New monitor certificate",
-    );
+    info!(success = true, "New monitor certificate",);
     finish!(JsonResponse::new(MonitorResponse::Success))
 }
 
@@ -372,30 +326,25 @@ pub struct PostServerReq {
     pub start: bool,
 }
 
-#[plugin_api(RUNTIME)]
-pub async fn post_server(req: Request, param: Json<PostServerReq>) -> RspResult<JsonResponse> {
-    let srv = SERVICE.get().unwrap();
-    let s = srv.get_server();
+pub async fn post_server(param: Json<PostServerReq>) -> RspResult<JsonResponse> {
+    let srv = &PLUGIN_INSTANCE.server;
     if param.start {
-        if !s.is_running() {
-            let addr = srv.get_setting_address(&req.skynet).unwrap_or_default();
-            let key = srv.get_setting_certificate(&req.skynet).unwrap_or_default();
-            RUNTIME.get().unwrap().spawn(async move {
-                srv.get_server()
-                    .start(&addr, key)
+        if !srv.is_running() {
+            let db = PLUGIN_INSTANCE.db.get().unwrap();
+            let addr = Plugin::get_setting_address(db).await?.unwrap_or_default();
+            let key = Plugin::get_setting_certificate(db)
+                .await?
+                .unwrap_or_default();
+            PLUGIN_INSTANCE.runtime.spawn(async move {
+                srv.start(&addr, key)
                     .await
                     .map_err(|e| error!(address=addr, error=%e, "Failed to start server"))
             });
         }
-    } else if s.is_running() {
-        s.stop();
+    } else if srv.is_running() {
+        srv.stop();
     }
-    info!(
-        success = true,
-        plugin = %ID,
-        start = param.start,
-        "Post monitor server",
-    );
+    info!(success = true, start = param.start, "Post monitor server",);
     finish!(JsonResponse::new(MonitorResponse::Success))
 }
 
@@ -406,25 +355,22 @@ pub struct PutSettingsReq {
     pub address: Option<String>,
 }
 
-#[plugin_api(RUNTIME)]
-pub async fn put_settings(req: Request, param: Json<PutSettingsReq>) -> RspResult<JsonResponse> {
-    let tx = DB.get().unwrap().begin().await?;
-    let srv = SERVICE.get().unwrap();
+pub async fn put_settings(param: Json<PutSettingsReq>) -> RspResult<JsonResponse> {
+    let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
     if let Some(x) = &param.shell {
-        srv.set_setting_shell(&tx, &req.skynet, x).await?;
+        Plugin::set_setting_shell(&tx, x).await?;
     }
     if let Some(x) = &param.address {
-        srv.set_setting_address(&tx, &req.skynet, x).await?;
+        Plugin::set_setting_address(&tx, x).await?;
     }
     tx.commit().await?;
 
     if param.address.is_some() {
-        restart_server(5, srv.to_owned(), &req.skynet).await;
+        restart_server(5).await?;
     }
 
     info!(
         success = true,
-        plugin = %ID,
         address = ?param.address,
         shell = ?param.shell,
         "Put monitor settings",
@@ -432,9 +378,8 @@ pub async fn put_settings(req: Request, param: Json<PutSettingsReq>) -> RspResul
     finish!(JsonResponse::new(MonitorResponse::Success))
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn reconnect_agent(aid: Path<HyUuid>) -> RspResult<JsonResponse> {
-    if let Some(agent) = SERVICE.get().unwrap().agent.read().get(&aid) {
+    if let Some(agent) = PLUGIN_INSTANCE.agent.get(&aid) {
         if let Some(x) = &agent.message {
             x.send(skynet_api_monitor::message::Data::Reconnect(
                 ReconnectMessage {},
@@ -445,7 +390,6 @@ pub async fn reconnect_agent(aid: Path<HyUuid>) -> RspResult<JsonResponse> {
     }
     info!(
         success = true,
-        plugin = %ID,
         aid = %aid,
         "Reconnect monitor agent",
     );
@@ -458,23 +402,23 @@ pub struct PutAgentsReq {
     name: String,
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn put_agent(aid: Path<HyUuid>, param: Json<PutAgentsReq>) -> RspResult<JsonResponse> {
-    let srv = SERVICE.get().unwrap();
-    if !srv.agent_exist(&aid) {
+    if PLUGIN_INSTANCE.agent.get(&aid).is_none() {
         finish!(JsonResponse::not_found());
     }
 
-    let tx = DB.get().unwrap().begin().await?;
-    if srv.find_by_name(&tx, &param.name).await?.is_some() {
+    let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
+    if AgentViewer::find_by_name(&tx, &param.name).await?.is_some() {
         finish!(JsonResponse::new(MonitorResponse::AgentExist));
     }
-    srv.rename(&tx, &aid, &param.name).await?;
+    AgentViewer::rename(&tx, &aid, &param.name).await?;
+    if let Some(mut x) = PLUGIN_INSTANCE.agent.get_mut(&aid) {
+        x.name = param.name.clone();
+    }
     tx.commit().await?;
 
     info!(
         success = true,
-        plugin = %ID,
         aid = %aid,
         name = param.name,
         "Put monitor agent",
@@ -482,39 +426,34 @@ pub async fn put_agent(aid: Path<HyUuid>, param: Json<PutAgentsReq>) -> RspResul
     finish!(JsonResponse::new(MonitorResponse::Success))
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn delete_agent(aid: Path<HyUuid>) -> RspResult<JsonResponse> {
-    let srv = SERVICE.get().unwrap();
-    if !srv.agent_exist(&aid) {
+    if PLUGIN_INSTANCE.agent.get(&aid).is_none() {
         finish!(JsonResponse::not_found());
     }
 
-    let tx = DB.get().unwrap().begin().await?;
-    let rows = srv.delete(&tx, &aid).await?;
+    let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
+    let rows = AgentViewer::delete(&tx, &[*aid]).await?;
+    PLUGIN_INSTANCE.agent.remove(&aid);
     tx.commit().await?;
 
     info!(
         success = true,
-        plugin = %ID,
         aid = %aid,
         "Delete monitor agent",
     );
     finish!(JsonResponse::new(MonitorResponse::Success).json(rows))
 }
 
-#[plugin_api(RUNTIME)]
 pub async fn delete_agents(param: Json<IDsReq>) -> RspResult<JsonResponse> {
-    let srv = SERVICE.get().unwrap();
-    let tx = DB.get().unwrap().begin().await?;
-    let mut rows = 0;
+    let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
+    let rows = AgentViewer::delete(&tx, &param.id).await?;
     for i in &param.id {
-        rows += srv.delete(&tx, i).await?;
+        PLUGIN_INSTANCE.agent.remove(i);
     }
     tx.commit().await?;
 
     info!(
         success = true,
-        plugin = %ID,
         aid = ?param.id,
         "Delete monitor agents",
     );
