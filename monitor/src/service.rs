@@ -19,7 +19,7 @@ use skynet_api::{
 use skynet_api_monitor::{
     entity::agents, message::Data, semver::Version, viewer::agents::AgentViewer, Agent,
     AgentCommand, AgentFile, AgentStatus, CommandKillMessage, CommandReqMessage, FileReqMessage,
-    InfoMessage, StatusRspMessage, ID,
+    InfoMessage, QuitMessage, StatusRspMessage, ID,
 };
 
 use crate::{Plugin, PLUGIN_INSTANCE};
@@ -356,5 +356,16 @@ impl Plugin {
                 self.agent.insert(x.id, x);
             });
         Ok(())
+    }
+
+    pub fn remove_agent(&self, id: &HyUuid) -> bool {
+        if let Some(x) = self.agent.remove(id) {
+            if let Some(x) = &x.1.message {
+                let _ = x.send(Data::Quit(QuitMessage {}));
+            }
+            true
+        } else {
+            false
+        }
     }
 }

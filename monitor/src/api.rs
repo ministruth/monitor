@@ -433,7 +433,7 @@ pub async fn delete_agent(aid: Path<HyUuid>) -> RspResult<JsonResponse> {
 
     let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
     let rows = AgentViewer::delete(&tx, &[*aid]).await?;
-    PLUGIN_INSTANCE.agent.remove(&aid);
+    PLUGIN_INSTANCE.remove_agent(&aid);
     tx.commit().await?;
 
     info!(
@@ -448,7 +448,7 @@ pub async fn delete_agents(param: Json<IDsReq>) -> RspResult<JsonResponse> {
     let tx = PLUGIN_INSTANCE.db.get().unwrap().begin().await?;
     let rows = AgentViewer::delete(&tx, &param.id).await?;
     for i in &param.id {
-        PLUGIN_INSTANCE.agent.remove(i);
+        PLUGIN_INSTANCE.remove_agent(i);
     }
     tx.commit().await?;
 

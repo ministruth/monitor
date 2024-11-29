@@ -1,3 +1,7 @@
+# v0.5.1
+## Bug fix
+1. Fix a bug that can cause agent disconnect.
+
 # v0.5.0
 ## Changes
 1. Dependency upgrade, `skynet_api` version 0.3.

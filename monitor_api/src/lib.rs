@@ -150,11 +150,3 @@ impl From<agents::Model> for Agent {
         }
     }
 }
-
-impl Drop for Agent {
-    fn drop(&mut self) {
-        if let Some(x) = &self.message {
-            let _ = x.send(Data::Quit(QuitMessage {}));
-        }
-    }
-}
