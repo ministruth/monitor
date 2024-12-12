@@ -1,3 +1,10 @@
+# v0.6.0
+## Changes
+1. Update `skynet_api` version.
+
+## Bug fix
+1. Update localization files to fix translation.
+
 # v0.5.1
 ## Bug fix
 1. Fix a bug that can cause agent disconnect.

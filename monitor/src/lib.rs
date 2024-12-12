@@ -146,7 +146,7 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
                 MenuItem {
                     id: HyUuid(uuid!("f47a0d3a-f09e-4e5d-b62c-0012225e5155")),
                     plugin: Some(ID),
-                    name: format!("{ID}.menu.monitor"),
+                    name: String::from("menu.monitor"),
                     path: format!("/plugin/{ID}/config"),
                     checker: PermChecker::new_entry(
                         skynet.default_id[PermManagePluginID],
@@ -161,7 +161,7 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
                 MenuItem {
                     id: HyUuid(uuid!("d2231000-53be-46ac-87ae-73fb3f76f18f")),
                     plugin: Some(ID),
-                    name: format!("{ID}.menu.monitor"),
+                    name: String::from("menu.monitor"),
                     path: format!("/plugin/{ID}/view"),
                     checker: PermChecker::new_entry(*self.view_id.get().unwrap(), PERM_READ),
                     ..Default::default()

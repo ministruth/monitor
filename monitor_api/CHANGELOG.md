@@ -1,3 +1,6 @@
+# v0.6.0
+1. Update `skynet_api` version.
+
 # v0.5.1
 ## Bug fix
 1. Fix a bug that can cause agent disconnect.

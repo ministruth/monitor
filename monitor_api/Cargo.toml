@@ -1,6 +1,6 @@
 [package]
 name = "skynet_api_monitor"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2021"
 authors = ["MXWXZ <matrixwxz@gmail.com>"]
 description = "API for Skynet monitor plugin."
@@ -25,7 +25,7 @@ actix-cloud = { version = "0.4", default-features = false, features = [
 ffi_rpc = "0.5"
 semver = { version = "1.0", features = ["serde"] }
 
-skynet_api = { version = "0.3", features = [
+skynet_api = { version = "0.4", features = [
     "database",
     "request-condition",
     "service-result",

@@ -38,7 +38,7 @@ const handleDeleteSelected = async (
   keys: Key[],
 ) => {
   confirm({
-    title: intl.get('pages.config.agent.op.delete.passive.selected.title'),
+    title: intl.get('pages.config.agent.delete.passive.selected.title'),
     content: intl.get('app.confirm'),
     onOk() {
       return new Promise((resolve, reject) => {
@@ -75,7 +75,7 @@ const request = async (
 
 export const PassiveAgentColumns: Columns = (intl) => [
   {
-    title: intl.get('pages.config.agent.op.passive.table.name'),
+    title: intl.get('tables.name'),
     dataIndex: 'name',
     fieldProps: {
       maxLength: 32,
@@ -85,7 +85,7 @@ export const PassiveAgentColumns: Columns = (intl) => [
     },
   },
   {
-    title: intl.get('pages.config.agent.op.passive.table.address'),
+    title: intl.get('tables.address'),
     dataIndex: 'address',
     fieldProps: {
       maxLength: 64,
@@ -95,10 +95,10 @@ export const PassiveAgentColumns: Columns = (intl) => [
     },
   },
   {
-    title: intl.get('pages.config.agent.op.passive.table.retrytime'),
+    title: intl.get('tables.retrytime'),
     dataIndex: 'retry_time',
     valueType: 'digit',
-    tooltip: intl.get('pages.config.agent.op.passive.table.retrytime.tip'),
+    tooltip: intl.get('tables.retrytime.tip'),
     initialValue: 0,
     formItemProps: {
       rules: [{ required: true }],
@@ -113,18 +113,18 @@ const PassiveAgent = () => {
   const ref = useRef<ActionType>();
   const statusEnum: { [Key: number]: { label: string; color: string } } = {
     0: {
-      label: intl.get('pages.config.agent.op.passive.table.status.inactive'),
+      label: intl.get('tables.status.inactive'),
       color: 'default',
     },
     1: {
-      label: intl.get('pages.config.agent.op.passive.table.status.active'),
+      label: intl.get('tables.status.active'),
       color: 'success',
     },
   };
   const columns: ProColumns[] = [
     IDColumn(intl),
     {
-      title: intl.get('pages.config.agent.op.passive.table.name'),
+      title: intl.get('tables.name'),
       dataIndex: 'name',
       align: 'center',
       ellipsis: true,
@@ -137,21 +137,17 @@ const PassiveAgent = () => {
       },
     },
     {
-      title: intl.get('pages.config.agent.op.passive.table.address'),
+      title: intl.get('tables.address'),
       dataIndex: 'address',
       align: 'center',
     },
     {
-      title: intl.get('pages.config.agent.op.passive.table.retrytime'),
+      title: intl.get('tables.retrytime'),
       dataIndex: 'retry_time',
       align: 'center',
-      tooltip: intl.get('pages.config.agent.op.passive.table.retrytime.tip'),
+      tooltip: intl.get('tables.retrytime.tip'),
     },
-    StatusColumn(
-      intl.get('pages.config.agent.op.passive.table.status'),
-      'status',
-      statusEnum,
-    ),
+    StatusColumn(intl.get('tables.status'), 'status', statusEnum),
     ...CreatedAtColumn(intl),
     {
       title: intl.get('app.op'),
@@ -171,7 +167,7 @@ const PassiveAgent = () => {
           <TableBtn
             key="activate"
             icon={ThunderboltOutlined}
-            tip={intl.get('pages.config.agent.op.activate.passive.tip')}
+            tip={intl.get('pages.config.agent.activate.passive.tip')}
             perm={UserPerm.PermWrite}
             permName="manage.plugin"
             onClick={() => handleActivate(row.id)}
@@ -183,12 +179,9 @@ const PassiveAgent = () => {
             permName="manage.plugin"
             perm={UserPerm.PermWrite}
             url={`${API_PREFIX}/passive_agents/${row.id}`}
-            confirmTitle={intl.get(
-              'pages.config.agent.op.delete.passive.title',
-              {
-                name: row.name,
-              },
-            )}
+            confirmTitle={intl.get('pages.config.agent.delete.passive.title', {
+              name: row.name,
+            })}
           />,
         ];
       },
@@ -230,10 +223,10 @@ const PassiveAgent = () => {
         disabled={!checkPerm(access, 'manage.plugin', UserPerm.PermRead)}
         onClick={() => setIsModalOpen(true)}
       >
-        <FormattedMessage id="pages.config.agent.op.passive" />
+        <FormattedMessage id="pages.config.agent.passive" />
       </Button>
       <Modal
-        title={intl.get('pages.config.agent.op.passive.title')}
+        title={intl.get('pages.config.agent.passive.title')}
         open={isModalOpen}
         footer={null}
         onCancel={() => {
@@ -269,7 +262,7 @@ const PassiveAgent = () => {
                 perm={UserPerm.PermWrite}
                 key="add"
                 width={500}
-                title={intl.get('pages.config.agent.op.add.passive.title')}
+                title={intl.get('pages.config.agent.add.passive.title')}
                 schemaProps={{
                   onFinish: handleAdd,
                   columns: PassiveAgentColumns(intl),

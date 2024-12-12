@@ -4,12 +4,12 @@ Success:
 
 AgentExist:
   code: 10000
-  message: "2eb2e1a5-66b4-45f9-ad24-3c4f05c858aa.response.agent.exist"
+  message: "response.agent.exist"
 
 PassiveAgentNameExist:
   code: 10001
-  message: "2eb2e1a5-66b4-45f9-ad24-3c4f05c858aa.response.passive_agent.name_exist"
+  message: "response.passive_agent.name_exist"
 
 PassiveAgentAddressExist:
   code: 10002
-  message: "2eb2e1a5-66b4-45f9-ad24-3c4f05c858aa.response.passive_agent.address_exist"
+  message: "response.passive_agent.address_exist"

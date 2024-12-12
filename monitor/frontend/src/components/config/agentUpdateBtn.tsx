@@ -32,7 +32,7 @@ const AgentUpdate: React.FC<AgentBtnProps> = (props) => {
   };
   const columns: Columns = (intl) => [
     {
-      title: intl.get('pages.agent.table.name'),
+      title: intl.get('tables.name'),
       dataIndex: 'name',
       tooltip: intl.get('pages.config.agent.form.name.tip'),
       fieldProps: {
@@ -46,7 +46,7 @@ const AgentUpdate: React.FC<AgentBtnProps> = (props) => {
 
   return (
     <TableOp
-      title={intl.get('pages.config.agent.op.update.title')}
+      title={intl.get('pages.config.agent.update.title')}
       trigger={
         <TableBtn
           key="update"

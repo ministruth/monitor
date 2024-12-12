@@ -30,7 +30,7 @@ const PassiveUpdate: React.FC<AgentBtnProps> = (props) => {
 
   return (
     <TableOp
-      title={intl.get('pages.config.agent.op.update.passive.title')}
+      title={intl.get('pages.config.agent.update.passive.title')}
       trigger={
         <TableBtn
           key="update"

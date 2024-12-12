@@ -1,3 +1,4 @@
+import GeoIP from '@/common/components/geoip';
 import confirm from '@/common_components/layout/modal';
 import Table from '@/common_components/layout/table';
 import {
@@ -20,12 +21,8 @@ import {
 } from '@/utils';
 import { ReloadOutlined } from '@ant-design/icons';
 import ProCard from '@ant-design/pro-card';
-import {
-  ActionType,
-  ParamsType,
-  ProDescriptions,
-} from '@ant-design/pro-components';
-import { ProColumns } from '@ant-design/pro-table';
+import { ParamsType, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns } from '@ant-design/pro-table';
 import { FormattedMessage, useModel } from '@umijs/max';
 import { Button } from 'antd';
 import { SortOrder } from 'antd/es/table/interface';
@@ -54,7 +51,7 @@ const handleReconnect = (
   name: string,
 ) => {
   confirm({
-    title: intl.get('pages.config.agent.op.reconnect.title', {
+    title: intl.get('pages.config.agent.reconnect.title', {
       name: name,
     }),
     content: intl.get('app.confirm'),
@@ -80,7 +77,7 @@ const handleDeleteSelected = async (
   keys: Key[],
 ) => {
   confirm({
-    title: intl.get('pages.config.agent.op.delete.selected.title'),
+    title: intl.get('pages.config.agent.delete.selected.title'),
     content: intl.get('app.confirm'),
     onOk() {
       return new Promise((resolve, reject) => {
@@ -104,15 +101,15 @@ const AgentCard = () => {
   const { access } = useModel('@@qiankunStateFromMaster');
   const statusEnum: { [Key: number]: { label: string; color: string } } = {
     0: {
-      label: intl.get('pages.agent.table.status.offline'),
+      label: intl.get('tables.status.offline'),
       color: 'default',
     },
     1: {
-      label: intl.get('pages.agent.table.status.online'),
+      label: intl.get('tables.status.online'),
       color: 'success',
     },
     2: {
-      label: intl.get('pages.agent.table.status.updating'),
+      label: intl.get('tables.status.updating'),
       color: 'warning',
     },
   };
@@ -120,7 +117,7 @@ const AgentCard = () => {
     SearchColumn(intl),
     IDColumn(intl),
     {
-      title: intl.get('pages.agent.table.name'),
+      title: intl.get('tables.name'),
       dataIndex: 'name',
       align: 'center',
       hideInSearch: true,
@@ -134,26 +131,27 @@ const AgentCard = () => {
       },
     },
     {
-      title: intl.get('pages.agent.table.ip'),
+      title: intl.get('tables.ip'),
       dataIndex: 'ip',
       align: 'center',
       hideInSearch: true,
+      render: (_, row) => <GeoIP value={row.ip} />,
     },
     {
-      title: intl.get('pages.agent.table.os'),
+      title: intl.get('tables.os'),
       dataIndex: 'os',
       align: 'center',
       hideInSearch: true,
     },
     {
-      title: intl.get('pages.agent.table.arch'),
+      title: intl.get('tables.arch'),
       dataIndex: 'arch',
       align: 'center',
       hideInSearch: true,
     },
-    StatusColumn(intl.get('pages.agent.table.status'), 'status', statusEnum),
+    StatusColumn(intl.get('tables.status'), 'status', statusEnum),
     {
-      title: intl.get('pages.agent.table.lastlogin'),
+      title: intl.get('tables.lastlogin'),
       dataIndex: 'last_login',
       align: 'center',
       valueType: 'dateTime',
@@ -178,7 +176,7 @@ const AgentCard = () => {
           <TableBtn
             key="reconnect"
             icon={ReloadOutlined}
-            tip={intl.get('pages.config.agent.op.reconnect.tip')}
+            tip={intl.get('pages.config.agent.reconnect.tip')}
             color="#faad14"
             perm={UserPerm.PermWrite}
             permName="manage.plugin"
@@ -192,7 +190,7 @@ const AgentCard = () => {
             perm={UserPerm.PermWrite}
             tableRef={ref}
             url={`${API_PREFIX}/agents/${row.id}`}
-            confirmTitle={intl.get('pages.config.agent.op.delete.title', {
+            confirmTitle={intl.get('pages.config.agent.delete.title', {
               name: row.name,
             })}
           />,
@@ -241,28 +239,28 @@ const AgentCard = () => {
                 dataSource={record}
                 columns={[
                   {
-                    title: intl.get('pages.agent.table.uid'),
+                    title: intl.get('tables.uid'),
                     dataIndex: 'uid',
                     style: { paddingBottom: 0 },
                     copyable: true,
                   },
                   {
-                    title: intl.get('pages.agent.table.hostname'),
+                    title: intl.get('tables.hostname'),
                     dataIndex: 'hostname',
                     style: { paddingBottom: 0 },
                   },
                   {
-                    title: intl.get('pages.agent.table.system'),
+                    title: intl.get('tables.system'),
                     dataIndex: 'system',
                     style: { paddingBottom: 0 },
                   },
                   {
-                    title: intl.get('pages.agent.table.address'),
+                    title: intl.get('tables.address'),
                     dataIndex: 'address',
                     style: { paddingBottom: 0 },
                   },
                   {
-                    title: intl.get('pages.agent.table.endpoint'),
+                    title: intl.get('tables.endpoint'),
                     dataIndex: 'endpoint',
                     style: { paddingBottom: 0 },
                   },
