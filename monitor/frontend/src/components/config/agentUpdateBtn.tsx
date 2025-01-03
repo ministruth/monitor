@@ -1,7 +1,7 @@
 import { Columns } from '@/common_components/layout/table/column';
 import TableOp from '@/common_components/layout/table/opBtn';
 import TableBtn from '@/common_components/layout/table/tableBtn';
-import { API_PREFIX } from '@/config';
+import { API_PREFIX, PLUGIN_ID } from '@/config';
 import { checkAPI, getIntl, putAPI, UserPerm } from '@/utils';
 import { EditOutlined } from '@ant-design/icons';
 import { ActionType } from '@ant-design/pro-components';
@@ -55,7 +55,7 @@ const AgentUpdate: React.FC<AgentBtnProps> = (props) => {
         />
       }
       rollback={<EditOutlined key="update" />}
-      permName="manage.plugin"
+      permName={`manage.${PLUGIN_ID}`}
       perm={UserPerm.PermWrite}
       schemaProps={{
         onFinish: handleUpdate,

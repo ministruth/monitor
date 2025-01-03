@@ -1,6 +1,6 @@
 import ExSchema, { ExSchemaHandle } from '@/common_components/layout/exschema';
 import confirm from '@/common_components/layout/modal';
-import { API_PREFIX, BASE_URL } from '@/config';
+import { API_PREFIX, BASE_URL, PLUGIN_ID } from '@/config';
 import {
   StringIntl,
   UserPerm,
@@ -103,7 +103,11 @@ const SettingCard = () => {
   const formRef = useRef<ProFormInstance>();
   const ref = useRef<ExSchemaHandle>();
   const { access } = useModel('@@qiankunStateFromMaster');
-  const perm_disable = !checkPerm(access, 'manage.plugin', UserPerm.PermWrite);
+  const perm_disable = !checkPerm(
+    access,
+    `manage.${PLUGIN_ID}`,
+    UserPerm.PermWrite,
+  );
 
   const columns: ProFormColumnsType[] = [
     {

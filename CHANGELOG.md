@@ -1,3 +1,8 @@
+# v0.6.1
+## Changes
+1. Latency now use round-trip latency.
+2. Split manage permission.
+
 # v0.6.0
 ## Changes
 1. Update `skynet_api` version.

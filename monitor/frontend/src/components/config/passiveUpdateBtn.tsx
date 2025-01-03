@@ -1,6 +1,6 @@
 import TableOp from '@/common_components/layout/table/opBtn';
 import TableBtn from '@/common_components/layout/table/tableBtn';
-import { API_PREFIX } from '@/config';
+import { API_PREFIX, PLUGIN_ID } from '@/config';
 import { checkAPI, getIntl, putAPI, UserPerm } from '@/utils';
 import { EditOutlined } from '@ant-design/icons';
 import { ParamsType } from '@ant-design/pro-provider';
@@ -39,7 +39,7 @@ const PassiveUpdate: React.FC<AgentBtnProps> = (props) => {
         />
       }
       rollback={<EditOutlined key="update" />}
-      permName="manage.plugin"
+      permName={`manage.${PLUGIN_ID}`}
       perm={UserPerm.PermWrite}
       schemaProps={{
         onFinish: handleUpdate,

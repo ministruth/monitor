@@ -219,7 +219,7 @@ impl Plugin {
             item.total_memory = Some(data.total_memory);
             item.disk = Some(data.disk);
             item.total_disk = Some(data.total_disk);
-            item.latency = Some((now - data.time) / 2); // round trip
+            item.latency = Some(now - data.time);
             item.band_up = Some(data.band_up);
             item.band_down = Some(data.band_down);
         }

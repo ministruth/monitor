@@ -10,7 +10,7 @@ import TableDelete from '@/common_components/layout/table/deleteBtn';
 import TableNew from '@/common_components/layout/table/newBtn';
 import styles from '@/common_components/layout/table/style.less';
 import TableBtn from '@/common_components/layout/table/tableBtn';
-import { API_PREFIX } from '@/config';
+import { API_PREFIX, PLUGIN_ID } from '@/config';
 import {
   checkAPI,
   checkPerm,
@@ -169,14 +169,14 @@ const PassiveAgent = () => {
             icon={ThunderboltOutlined}
             tip={intl.get('pages.config.agent.activate.passive.tip')}
             perm={UserPerm.PermWrite}
-            permName="manage.plugin"
+            permName={`manage.${PLUGIN_ID}`}
             onClick={() => handleActivate(row.id)}
             disabled={row.status == 1}
           />,
           <TableDelete
             key="delete"
             tableRef={ref}
-            permName="manage.plugin"
+            permName={`manage.${PLUGIN_ID}`}
             perm={UserPerm.PermWrite}
             url={`${API_PREFIX}/passive_agents/${row.id}`}
             confirmTitle={intl.get('pages.config.agent.delete.passive.title', {
@@ -220,7 +220,7 @@ const PassiveAgent = () => {
       <Button
         key="passive"
         type="primary"
-        disabled={!checkPerm(access, 'manage.plugin', UserPerm.PermRead)}
+        disabled={!checkPerm(access, `manage.${PLUGIN_ID}`, UserPerm.PermRead)}
         onClick={() => setIsModalOpen(true)}
       >
         <FormattedMessage id="pages.config.agent.passive" />
@@ -258,7 +258,7 @@ const PassiveAgent = () => {
             },
             actions: [
               <TableNew
-                permName="manage.plugin"
+                permName={`manage.${PLUGIN_ID}`}
                 perm={UserPerm.PermWrite}
                 key="add"
                 width={500}
@@ -272,8 +272,11 @@ const PassiveAgent = () => {
                 key="delete"
                 danger
                 disabled={
-                  !checkPerm(access, 'manage.plugin', UserPerm.PermWrite) ||
-                  selectedRowKeys.length === 0
+                  !checkPerm(
+                    access,
+                    `manage.${PLUGIN_ID}`,
+                    UserPerm.PermWrite,
+                  ) || selectedRowKeys.length === 0
                 }
                 onClick={() => handleDeleteSelected(intl, ref, selectedRowKeys)}
               >

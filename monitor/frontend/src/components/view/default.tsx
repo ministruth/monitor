@@ -120,7 +120,7 @@ const DefaultTab: React.FC<TabItemProps> = (props) => {
             icon={CodeOutlined}
             tip={intl.get('pages.view.card.shell.tip')}
             onClick={(_) => props.addTabCallback?.(row)}
-            permName={`view.plugin.${PLUGIN_ID}`}
+            permName={`view.${PLUGIN_ID}`}
             perm={UserPerm.PermAll}
             disabled={row.status != 1 || row.disable_shell}
           />,

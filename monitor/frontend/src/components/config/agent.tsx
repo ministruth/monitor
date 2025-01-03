@@ -9,7 +9,7 @@ import {
 import TableDelete from '@/common_components/layout/table/deleteBtn';
 import styles from '@/common_components/layout/table/style.less';
 import TableBtn from '@/common_components/layout/table/tableBtn';
-import { API_PREFIX } from '@/config';
+import { API_PREFIX, PLUGIN_ID } from '@/config';
 import {
   StringIntl,
   UserPerm,
@@ -179,14 +179,14 @@ const AgentCard = () => {
             tip={intl.get('pages.config.agent.reconnect.tip')}
             color="#faad14"
             perm={UserPerm.PermWrite}
-            permName="manage.plugin"
+            permName={`manage.${PLUGIN_ID}`}
             onClick={() => handleReconnect(intl, ref, row.id, row.name)}
             disabled={row.status != 1}
           />,
 
           <TableDelete
             key="delete"
-            permName="manage.plugin"
+            permName={`manage.${PLUGIN_ID}`}
             perm={UserPerm.PermWrite}
             tableRef={ref}
             url={`${API_PREFIX}/agents/${row.id}`}
@@ -222,7 +222,7 @@ const AgentCard = () => {
             key="delete"
             danger
             disabled={
-              !checkPerm(access, 'manage.plugin', UserPerm.PermWrite) ||
+              !checkPerm(access, `manage.${PLUGIN_ID}`, UserPerm.PermWrite) ||
               selectedRowKeys.length === 0
             }
             onClick={() => handleDeleteSelected(intl, ref, selectedRowKeys)}

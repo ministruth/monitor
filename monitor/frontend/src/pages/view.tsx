@@ -9,7 +9,7 @@ const ConfigPage = () => {
   return (
     <MainLayout
       title="titles.monitor"
-      access={`view.plugin.${PLUGIN_ID}`}
+      access={`view.${PLUGIN_ID}`}
       perm={UserPerm.PermRead}
     >
       <MainContainer

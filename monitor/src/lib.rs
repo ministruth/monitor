@@ -26,7 +26,7 @@ use skynet_api::{
         },
         registry::Registry,
     },
-    permission::{IDTypes::PermManagePluginID, PermChecker, PERM_ALL, PERM_READ, PERM_WRITE},
+    permission::{PermChecker, ScriptBuilder, PERM_ALL, PERM_READ, PERM_WRITE},
     plugin::{PluginStatus, Request, Response},
     request::{Method, Router, RouterType},
     route,
@@ -56,6 +56,7 @@ include!(concat!(env!("OUT_DIR"), "/response.rs"));
     shell_binding: Default::default(),
     agent: Default::default(),
     view_id: Default::default(),
+    manage_id: Default::default(),
     db: Default::default(),
     state: Default::default(),
     runtime: Runtime::new().unwrap(),
@@ -69,6 +70,7 @@ struct Plugin {
     shell_binding: DashMap<HyUuid, HyUuid>,
     agent: DashMap<HyUuid, Agent>,
     view_id: OnceLock<HyUuid>,
+    manage_id: OnceLock<HyUuid>,
     db: OnceLock<DatabaseConnection>,
     state: OnceLock<Data<GlobalState>>,
     runtime: Runtime,
@@ -131,10 +133,15 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
                 key.0
             };
             let _ = self.view_id.set(
+                PermissionViewer::find_or_init(&tx, &format!("view.{ID}"), "plugin monitor viewer")
+                    .await?
+                    .id,
+            );
+            let _ = self.manage_id.set(
                 PermissionViewer::find_or_init(
                     &tx,
-                    &format!("view.plugin.{ID}"),
-                    "plugin monitor viewer",
+                    &format!("manage.{ID}"),
+                    "plugin monitor manager",
                 )
                 .await?
                 .id,
@@ -148,10 +155,7 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
                     plugin: Some(ID),
                     name: String::from("menu.monitor"),
                     path: format!("/plugin/{ID}/config"),
-                    checker: PermChecker::new_entry(
-                        skynet.default_id[PermManagePluginID],
-                        PERM_READ,
-                    ),
+                    checker: PermChecker::new_entry(*self.manage_id.get().unwrap(), PERM_READ),
                     ..Default::default()
                 },
                 1,
@@ -192,136 +196,138 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
         })
     }
 
-    async fn on_register(&self, _: &Registry, skynet: Skynet, mut r: Vec<Router>) -> Vec<Router> {
+    async fn on_register(&self, _: &Registry, _skynet: Skynet, mut r: Vec<Router>) -> Vec<Router> {
+        let view_id = *self.view_id.get().unwrap();
+        let manage_id = *self.manage_id.get().unwrap();
         r.extend(vec![
             Router {
                 path: format!("/plugins/{ID}/ws"),
                 method: Method::Get,
                 route: RouterType::Websocket(ID, String::from("ws::service")),
-                checker: PermChecker::new_entry(*self.view_id.get().unwrap(), PERM_ALL),
+                checker: PermChecker::new_entry(view_id, PERM_ALL),
                 csrf: CSRFType::ForceParam,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents"),
                 method: Method::Get,
                 route: RouterType::Http(ID, String::from("api::get_passive_agents")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_READ),
+                checker: PermChecker::new_entry(manage_id, PERM_READ),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents"),
                 method: Method::Post,
                 route: RouterType::Http(ID, String::from("api::add_passive_agents")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents"),
                 method: Method::Delete,
                 route: RouterType::Http(ID, String::from("api::delete_passive_agents_batch")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents/{{paid}}"),
                 method: Method::Put,
                 route: RouterType::Http(ID, String::from("api::put_passive_agents")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents/{{paid}}"),
                 method: Method::Delete,
                 route: RouterType::Http(ID, String::from("api::delete_passive_agents")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/passive_agents/{{paid}}/activate"),
                 method: Method::Post,
                 route: RouterType::Http(ID, String::from("api::activate_passive_agents")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/agents"),
                 method: Method::Get,
                 route: RouterType::Http(ID, String::from("api::get_agents")),
-                checker: PermChecker::new_script(&format!(
-                    r#"new_entry("{}", PERM_READ).check(PERMISSION) || new_entry("{}", PERM_READ).check(PERMISSION)"#,
-                    self.view_id.get().unwrap(),
-                    skynet.default_id[PermManagePluginID]
-                )),
+                checker: PermChecker::new_script(
+                    &ScriptBuilder::new(view_id, PERM_READ)
+                        .or(manage_id, PERM_READ)
+                        .build(),
+                ),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/agents"),
                 method: Method::Delete,
                 route: RouterType::Http(ID, String::from("api::delete_agents")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/agents/{{aid}}"),
                 method: Method::Put,
                 route: RouterType::Http(ID, String::from("api::put_agent")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/agents/{{aid}}"),
                 method: Method::Delete,
                 route: RouterType::Http(ID, String::from("api::delete_agent")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/agents/{{aid}}/reconnect"),
                 method: Method::Post,
                 route: RouterType::Http(ID, String::from("api::reconnect_agent")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/settings"),
                 method: Method::Get,
                 route: RouterType::Http(ID, String::from("api::get_settings")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_READ),
+                checker: PermChecker::new_entry(manage_id, PERM_READ),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/settings"),
                 method: Method::Put,
                 route: RouterType::Http(ID, String::from("api::put_settings")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/settings/shell"),
                 method: Method::Get,
                 route: RouterType::Http(ID, String::from("api::get_settings_shell")),
-                checker: PermChecker::new_entry(*self.view_id.get().unwrap(), PERM_READ),
+                checker: PermChecker::new_entry(view_id, PERM_READ),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/settings/certificate"),
                 method: Method::Get,
                 route: RouterType::Http(ID, String::from("api::get_settings_certificate")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_READ),
+                checker: PermChecker::new_entry(manage_id, PERM_READ),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/settings/certificate"),
                 method: Method::Post,
                 route: RouterType::Http(ID, String::from("api::new_settings_certificate")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
             Router {
                 path: format!("/plugins/{ID}/settings/server"),
                 method: Method::Post,
                 route: RouterType::Http(ID, String::from("api::post_server")),
-                checker: PermChecker::new_entry(skynet.default_id[PermManagePluginID], PERM_WRITE),
+                checker: PermChecker::new_entry(manage_id, PERM_WRITE),
                 csrf: CSRFType::Header,
             },
         ]);

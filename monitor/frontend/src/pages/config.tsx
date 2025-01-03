@@ -2,6 +2,7 @@ import MainLayout from '@/common_components/layout';
 import MainContainer from '@/common_components/layout/container';
 import AgentCard from '@/components/config/agent';
 import SettingCard from '@/components/config/setting';
+import { PLUGIN_ID } from '@/config';
 import { UserPerm, getIntl } from '@/utils';
 import { Space } from 'antd';
 
@@ -10,7 +11,7 @@ const ConfigPage = () => {
   return (
     <MainLayout
       title="titles.monitor"
-      access="manage.plugin"
+      access={`manage.${PLUGIN_ID}`}
       perm={UserPerm.PermRead}
     >
       <MainContainer
