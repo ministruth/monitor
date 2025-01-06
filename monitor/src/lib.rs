@@ -89,11 +89,11 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
             skynet.logger.plugin_start(server);
             if let Some(api) = reg.get(&skynet_api_agent::ID.to_string()) {
                 let api: skynet_api_agent::AgentService = api.into();
-                if VersionReq::parse("^0.5.0")
-                    .unwrap()
-                    .matches(&api.api_version(reg).await)
-                {
+                let ver = api.api_version(reg).await;
+                if VersionReq::parse("^0.6.0").unwrap().matches(&ver) {
                     let _ = self.agent_api.set(api);
+                } else {
+                    warn!(plugin = %ID, "Agent plugin version mismatch ({}), required `^0.6.0`", ver);
                 }
             } else {
                 warn!(plugin = %ID, "Agent plugin not enabled, auto update disabled");

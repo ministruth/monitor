@@ -308,6 +308,8 @@ impl Handler {
         let arch = data.arch.clone().unwrap_or_default();
         let version = data.version.clone();
 
+        debug!(%aid, sys, arch, version, "Agent info message received");
+
         if data.report_rate != 0 {
             self.status_clock = Some(interval(Duration::from_secs(data.report_rate.into())));
         }

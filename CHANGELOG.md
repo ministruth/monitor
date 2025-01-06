@@ -1,3 +1,7 @@
+# v0.6.2
+## Bug fix
+1. Fix agent API version.
+
 # v0.6.1
 ## Changes
 1. Latency now use round-trip latency.
