@@ -1,3 +1,7 @@
+# frontend-dev
+## Bug fix
+1. Fix several frontend permission bugs.
+
 # v0.6.2
 ## Bug fix
 1. Fix agent API version.

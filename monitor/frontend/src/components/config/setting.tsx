@@ -130,13 +130,13 @@ const SettingCard = () => {
             <Space style={{ marginLeft: '50px' }}>
               <Button
                 icon={<CaretRightOutlined />}
-                disabled={e === true}
+                disabled={e === true || perm_disable}
                 onClick={() => handleStart(ref)}
               />
               <Button
                 icon={<PauseOutlined />}
                 danger
-                disabled={e === false}
+                disabled={e === false || perm_disable}
                 onClick={() => handleStop(intl, ref)}
               />
             </Space>
@@ -179,7 +179,7 @@ const SettingCard = () => {
   return (
     <ProCard title={intl.get('pages.config.setting.title')} bordered>
       <ExSchema
-        perm_disabled={perm_disable}
+        disabled={perm_disable}
         layoutType="Form"
         layout="horizontal"
         labelAlign="left"
