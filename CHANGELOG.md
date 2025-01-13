@@ -1,4 +1,8 @@
-# frontend-dev
+# v0.6.3
+## Changes
+1. Dependency upgrade.
+
+# frontend-v0.2.4
 ## Bug fix
 1. Fix several frontend permission bugs.
 
