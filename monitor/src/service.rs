@@ -24,9 +24,10 @@ use skynet_api_monitor::{
 
 use crate::{Plugin, PLUGIN_INSTANCE};
 
-static SETTING_ADDRESS: Lazy<String> = Lazy::new(|| format!("plugin_{ID}_address"));
-static SETTING_CERTIFICATE: Lazy<String> = Lazy::new(|| format!("plugin_{ID}_certificate"));
-static SETTING_SHELL: Lazy<String> = Lazy::new(|| format!("plugin_{ID}_shell"));
+static SETTING_ADDRESS: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.address"));
+static SETTING_CERTIFICATE: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.certificate"));
+static SETTING_SHELL: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.shell"));
+static SETTING_TIMEOUT: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.timeout"));
 
 #[plugin_impl_trait]
 impl skynet_api_monitor::Service for Plugin {
@@ -185,7 +186,6 @@ impl Plugin {
             item.address = None;
             item.disable_shell = false;
             item.report_rate = 0;
-            item.last_rsp = None;
             item.cpu = None;
             item.memory = None;
             item.total_memory = None;
@@ -334,6 +334,18 @@ impl Plugin {
         Ok(None)
     }
 
+    pub async fn get_setting_timeout<C>(db: &C) -> Result<Option<u32>>
+    where
+        C: ConnectionTrait,
+    {
+        let x = SettingViewer::get(db, &SETTING_TIMEOUT).await?;
+        if let Some(x) = x {
+            Ok(Some(x.parse()?))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub async fn set_setting_address(db: &DatabaseTransaction, address: &str) -> Result<()> {
         SettingViewer::set(db, &SETTING_ADDRESS, address).await
     }
@@ -344,6 +356,10 @@ impl Plugin {
 
     pub async fn set_setting_shell(db: &DatabaseTransaction, shell_prog: &[String]) -> Result<()> {
         SettingViewer::set(db, &SETTING_SHELL, &serde_json::to_string(&shell_prog)?).await
+    }
+
+    pub async fn set_setting_timeout(db: &DatabaseTransaction, timeout: u32) -> Result<()> {
+        SettingViewer::set(db, &SETTING_TIMEOUT, &timeout.to_string()).await
     }
 
     pub async fn init_agent(&self, db: &DatabaseTransaction) -> Result<()> {

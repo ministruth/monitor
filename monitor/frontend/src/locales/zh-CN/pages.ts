@@ -16,6 +16,9 @@ export default {
   'pages.config.setting.cert.regenerate.title': '重新生成公私钥文件，确认？',
   'pages.config.setting.cert.regenerate.content':
     '所有客户端将会被踢出，需要新公钥才能连接。',
+  'pages.config.setting.timeout.text': '告警超时：',
+  'pages.config.setting.timeout.tip': '发送告警前的超时时间（秒），为0时禁用',
+  'pages.config.setting.timeout.second': '秒',
 
   'pages.config.agent.title': '客户端设置',
   'pages.config.agent.reconnect.tip': '重连',

@@ -14,6 +14,7 @@ use actix_cloud::{
 use dashmap::DashMap;
 use ecies::utils::generate_keypair;
 use migration::migrator::Migrator;
+use parking_lot::RwLock;
 use sea_orm_migration::MigratorTrait;
 use server::Server;
 use skynet_api::{
@@ -49,6 +50,8 @@ mod ws;
 
 include!(concat!(env!("OUT_DIR"), "/response.rs"));
 
+static WEBPUSH_ALERT: HyUuid = HyUuid(uuid!("725e32b0-910d-4b33-81e2-13a851bef416"));
+
 #[plugin_impl_instance(|| Plugin {
     server: Server::new(),
     agent_api: Default::default(),
@@ -60,6 +63,7 @@ include!(concat!(env!("OUT_DIR"), "/response.rs"));
     db: Default::default(),
     state: Default::default(),
     runtime: Runtime::new().unwrap(),
+    timeout: RwLock::new(0),
 })]
 #[plugin_impl_root]
 #[plugin_impl_call(skynet_api::plugin::api::PluginApi, skynet_api_monitor::Service)]
@@ -74,6 +78,7 @@ struct Plugin {
     db: OnceLock<DatabaseConnection>,
     state: OnceLock<Data<GlobalState>>,
     runtime: Runtime,
+    timeout: RwLock<u32>,
 }
 
 #[plugin_impl_trait]
@@ -85,12 +90,13 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
         _runtime_path: PathBuf,
     ) -> SResult<Skynet> {
         self.runtime.block_on(async {
-            let server: Service = reg.get(SKYNET_SERVICE).unwrap().into();
-            skynet.logger.plugin_start(server);
+            let skynet_service: Service = reg.get(SKYNET_SERVICE).unwrap().into();
+            self.server.init(skynet_service.clone());
+            skynet.logger.plugin_start(skynet_service.clone());
             if let Some(api) = reg.get(&skynet_api_agent::ID.to_string()) {
                 let api: skynet_api_agent::AgentService = api.into();
                 let ver = api.api_version(reg).await;
-                if VersionReq::parse("^0.6.0").unwrap().matches(&ver) {
+                if VersionReq::parse("^0.7.0").unwrap().matches(&ver) {
                     let _ = self.agent_api.set(api);
                 } else {
                     warn!(plugin = %ID, "Agent plugin version mismatch ({}), required `^0.6.0`", ver);
@@ -132,6 +138,13 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
                 Plugin::set_setting_certificate(&tx, &key.0).await?;
                 key.0
             };
+            let timeout = if let Some(x) = Plugin::get_setting_timeout(&tx).await? {
+                x
+            } else {
+               Plugin::set_setting_timeout(&tx, 180).await?;
+               180
+            };
+            *self.timeout.write() = timeout;
             let _ = self.view_id.set(
                 PermissionViewer::find_or_init(&tx, &format!("view.{ID}"), "plugin monitor viewer")
                     .await?
@@ -148,6 +161,13 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
             );
             self.init_agent(&tx).await?;
             tx.commit().await?;
+
+            skynet_service.webpush_register(
+                &reg, 
+                &WEBPUSH_ALERT,
+                &format!("plugin.{ID}.alert"),
+                &PermChecker::new_entry(*self.view_id.get().unwrap(), PERM_READ)
+            ).await;
 
             let _ = skynet.insert_menu(
                 MenuItem {

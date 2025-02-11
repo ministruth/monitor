@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{collections::HashSet, mem};
 
@@ -25,6 +26,7 @@ use derivative::Derivative;
 use ecies::SecretKey;
 use miniz_oxide::deflate::compress_to_vec;
 use parking_lot::RwLock;
+use skynet_api::service::{self, Service};
 use skynet_api::{
     anyhow::anyhow, bail, ffi_rpc::registry::Registry, request::Condition,
     sea_orm::TransactionTrait, HyUuid, Result,
@@ -36,7 +38,7 @@ use skynet_api_monitor::{
     Message, StatusReqMessage, StatusRspMessage, UpdateMessage, ID,
 };
 
-use crate::PLUGIN_INSTANCE;
+use crate::{PLUGIN_INSTANCE, WEBPUSH_ALERT};
 
 const MAX_MESSAGE_SIZE: u32 = 1024 * 1024 * 128;
 const AES256_KEY_SIZE: usize = 32;
@@ -474,7 +476,7 @@ impl Handler {
                             if self.aid.is_some() {
                                 let end_time = Utc::now();
                                 let time = (end_time - self.start_time).num_microseconds().unwrap_or(0);
-                                warn!(_time = end_time.timestamp_micros(), alive_time = time, error = %e, "Connection lost");
+                                info!(_time = end_time.timestamp_micros(), alive_time = time, error = %e, "Connection lost");
                             }
                             break;
                         }
@@ -511,6 +513,7 @@ struct Listener {
     passive_rx: UnboundedReceiver<HyUuid>,
     passive_agent: Arc<RwLock<HashSet<HyUuid>>>,
     shutdown_rx: Receiver<()>,
+    alert_clock: Interval,
 }
 
 impl Listener {
@@ -526,6 +529,7 @@ impl Listener {
             passive_rx,
             passive_agent,
             shutdown_rx,
+            alert_clock: interval(Duration::from_secs(5)),
         })
     }
 
@@ -547,7 +551,7 @@ impl Listener {
                 PassiveAgentViewer::find_by_id(PLUGIN_INSTANCE.db.get().unwrap(), &apid).await?;
             if let Some(m) = m {
                 if let Err(e) = Self::passive(&m.address, key, rx.resubscribe()).await {
-                    error!(plugin = %ID, error = %e, apid = %apid, address = m.address, "Monitor connect error");
+                    info!(plugin = %ID, error = %e, apid = %apid, address = m.address, "Monitor connect error");
                 }
                 if m.retry_time != 0 {
                     sleep(Duration::from_secs(m.retry_time.try_into()?)).await;
@@ -560,9 +564,30 @@ impl Listener {
         }
     }
 
-    async fn run(&mut self, key: SecretKey) {
+    async fn run(&mut self, key: SecretKey, service: Service) {
+        let mut alerted: HashMap<HyUuid, i64> = HashMap::new();
         loop {
             select! {
+                _ = self.alert_clock.tick() => {
+                    let now = Utc::now().timestamp_millis();
+                    let timeout = *PLUGIN_INSTANCE.timeout.read();
+                    if timeout != 0 {
+                        for i in &PLUGIN_INSTANCE.agent {
+                            if let Some(x) = i.last_rsp {
+                                if i.status != AgentStatus::Online &&
+                                    alerted.get(&i.id).map(ToOwned::to_owned).unwrap_or_default() != x &&
+                                    (now - x) > (timeout * 1000).into() {
+                                    alerted.insert(i.id, x);
+                                    service.webpush_send(&Registry::default(), &WEBPUSH_ALERT, &service::Message{
+                                        title: String::from("Warning"),
+                                        body: format!("Agent `{}` is offline for {timeout} seconds", i.name),
+                                        url: format!("/plugin/{ID}/view"),
+                                    }).await;
+                                }
+                            }
+                        }
+                    }
+                },
                 c = self.listener.accept() => {
                     match c {
                         Ok((stream, addr)) => {
@@ -601,12 +626,17 @@ impl Listener {
 #[derivative(Default(new = "true"))]
 pub struct Server {
     running: RwLock<bool>,
+    service: OnceLock<Service>,
     passive_channel: RwLock<Option<UnboundedSender<HyUuid>>>,
     passive_agent: Arc<RwLock<HashSet<HyUuid>>>,
     shutdown_tx: RwLock<Option<Sender<()>>>,
 }
 
 impl Server {
+    pub fn init(&self, service: Service) {
+        let _ = self.service.set(service);
+    }
+
     pub async fn start(&self, addr: &str, key: SecretKey) -> Result<()> {
         let (tx, mut rx) = channel(1);
         let (passive_tx, passive_rx) = unbounded_channel();
@@ -628,7 +658,7 @@ impl Server {
 
         info!(plugin = %ID, "Monitor server listening on {addr}");
         select! {
-            _ = listener.run(key) => {},
+            _ = listener.run(key, self.service.get().unwrap().clone()) => {},
             _ = rx.recv() => {},
         }
         *self.running.write() = false;

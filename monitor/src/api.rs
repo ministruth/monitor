@@ -255,6 +255,7 @@ pub async fn get_settings() -> RspResult<JsonResponse> {
         running: bool,
         shell: Vec<String>,
         address: String,
+        timeout: u32,
     }
 
     let db = PLUGIN_INSTANCE.db.get().unwrap();
@@ -262,6 +263,7 @@ pub async fn get_settings() -> RspResult<JsonResponse> {
         running: PLUGIN_INSTANCE.server.is_running(),
         shell: Plugin::get_setting_shell(db).await?.unwrap_or_default(),
         address: Plugin::get_setting_address(db).await?.unwrap_or_default(),
+        timeout: Plugin::get_setting_timeout(db).await?.unwrap_or_default()
     }));
 }
 
@@ -353,6 +355,7 @@ pub struct PutSettingsReq {
     #[validate(custom(function = "unique_validator"))]
     pub shell: Option<Vec<String>>,
     pub address: Option<String>,
+    pub timeout: Option<u32>,
 }
 
 pub async fn put_settings(param: Json<PutSettingsReq>) -> RspResult<JsonResponse> {
@@ -362,6 +365,10 @@ pub async fn put_settings(param: Json<PutSettingsReq>) -> RspResult<JsonResponse
     }
     if let Some(x) = &param.address {
         Plugin::set_setting_address(&tx, x).await?;
+    }
+    if let Some(x) = &param.timeout {
+        Plugin::set_setting_timeout(&tx, *x).await?;
+        *PLUGIN_INSTANCE.timeout.write() = *x;
     }
     tx.commit().await?;
 

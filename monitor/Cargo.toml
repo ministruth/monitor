@@ -1,6 +1,6 @@
 [package]
 name = "monitor"
-version = "0.6.3"
+version = "0.7.0"
 edition = "2021"
 authors = ["MXWXZ <matrixwxz@gmail.com>"]
 
@@ -33,9 +33,9 @@ actix-cloud = { version = "0.4", default-features = false, features = [
     "state",
     "response-json",
 ] }
-skynet_api_monitor = { version = "0.6", path = "../monitor_api" }
-skynet_api_agent = "0.6"
-skynet_api = { version = "0.4", features = [
+skynet_api_monitor = { version = "0.7", path = "../monitor_api" }
+skynet_api_agent = "0.7"
+skynet_api = { version = "0.5", features = [
     "plugin-api",
     "request-param",
     "service-skynet",

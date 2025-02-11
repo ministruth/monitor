@@ -174,6 +174,16 @@ const SettingCard = () => {
         );
       },
     },
+    {
+      title: intl.get('pages.config.setting.timeout.text'),
+      dataIndex: 'timeout',
+      valueType: 'digit',
+      tooltip: intl.get('pages.config.setting.timeout.tip'),
+      fieldProps: {
+        min: 0,
+        addonAfter: intl.get('pages.config.setting.timeout.second'),
+      },
+    },
   ];
 
   return (

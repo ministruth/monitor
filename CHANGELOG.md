@@ -1,3 +1,8 @@
+# v0.7.0
+## Changes
+1. Update `skynet_api` version.
+2. Support timeout webpush alert.
+
 # v0.6.3
 ## Changes
 1. Dependency upgrade.

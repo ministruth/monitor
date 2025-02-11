@@ -40,7 +40,7 @@ impl ShellService {
 
     pub async fn send(&self, data: FrontendMessage) -> Result<()> {
         self.skynet
-            .send(
+            .websocket_send(
                 self.reg.as_ref(),
                 &self.id,
                 &WSMessage::Binary(data.encode_to_vec().into()),
@@ -125,7 +125,7 @@ pub async fn service(reg: web::Data<Registry>, req: Request, data: WSMessage) ->
             if let Some(mut x) = PLUGIN_INSTANCE.shell.get_mut(&id) {
                 if let Err(e) = x.recv(s) {
                     let _ = skynet
-                        .send(
+                        .websocket_send(
                             &reg,
                             &id,
                             &WSMessage::Binary(
@@ -144,7 +144,7 @@ pub async fn service(reg: web::Data<Registry>, req: Request, data: WSMessage) ->
                     debug!(error = %e, "Error handle ws message");
                 }
             } else {
-                skynet.close(&reg, &id).await;
+                skynet.websocket_close(&reg, &id).await;
             }
         }
         WSMessage::Close => {
