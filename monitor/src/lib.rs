@@ -163,7 +163,7 @@ impl skynet_api::plugin::api::PluginApi for Plugin {
             tx.commit().await?;
 
             skynet_service.webpush_register(
-                &reg, 
+                reg,
                 &WEBPUSH_ALERT,
                 &format!("plugin.{ID}.alert"),
                 &PermChecker::new_entry(*self.view_id.get().unwrap(), PERM_READ)
