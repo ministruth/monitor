@@ -1,8 +1,8 @@
 use actix_cloud::async_trait;
 use sea_orm_migration::{MigrationTrait, SchemaManager};
 use skynet_api::sea_orm::{
-    sea_query::{self, ColumnDef, ForeignKey, ForeignKeyAction, Iden, Index, Table},
     DbErr, DeriveMigrationName,
+    sea_query::{self, ColumnDef, ForeignKey, ForeignKeyAction, Iden, Index, Table},
 };
 
 use super::migrator::table_prefix;

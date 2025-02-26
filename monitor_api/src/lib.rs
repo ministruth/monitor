@@ -10,7 +10,7 @@ use message::Data;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use skynet_api::{service::SResult, uuid, HyUuid};
+use skynet_api::{HyUuid, service::SResult, uuid};
 use std::{collections::HashMap, net::SocketAddr};
 
 pub use prost;

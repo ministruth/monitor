@@ -2,34 +2,33 @@ use core::str;
 use std::time::Duration;
 
 use actix_cloud::{
-    actix_web::{web::Path, HttpResponse},
+    actix_web::{HttpResponse, web::Path},
     response::{JsonResponse, RspResult},
     tokio::time::sleep,
     tracing::{error, info},
 };
 use actix_web_validator::{Json, QsQuery};
-use base64::{engine::general_purpose::STANDARD, Engine};
-use ecies::{utils::generate_keypair, PublicKey};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use ecies::{PublicKey, utils::generate_keypair};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_repr::Serialize_repr;
 use skynet_api::{
-    finish,
+    HyUuid, Result, finish,
     request::{
-        unique_validator, Condition, IDsReq, IntoExpr, PageData, PaginationParam, TimeParam,
+        Condition, IDsReq, IntoExpr, PageData, PaginationParam, TimeParam, unique_validator,
     },
     sea_orm::{ColumnTrait, IntoSimpleExpr, TransactionTrait},
-    HyUuid, Result,
 };
 use skynet_api_monitor::{
+    AgentStatus, ReconnectMessage,
     entity::passive_agents,
     viewer::{agents::AgentViewer, passive_agents::PassiveAgentViewer},
-    AgentStatus, ReconnectMessage,
 };
 use skynet_macro::common_req;
 use validator::Validate;
 
-use crate::{MonitorResponse, Plugin, PLUGIN_INSTANCE};
+use crate::{MonitorResponse, PLUGIN_INSTANCE, Plugin};
 
 #[derive(Debug, Validate, Deserialize)]
 pub struct GetAgentsReq {
@@ -268,11 +267,13 @@ pub async fn get_settings() -> RspResult<JsonResponse> {
 }
 
 pub async fn get_settings_shell() -> RspResult<JsonResponse> {
-    finish!(JsonResponse::new(MonitorResponse::Success).json(
-        Plugin::get_setting_shell(PLUGIN_INSTANCE.db.get().unwrap())
-            .await?
-            .unwrap_or_default()
-    ));
+    finish!(
+        JsonResponse::new(MonitorResponse::Success).json(
+            Plugin::get_setting_shell(PLUGIN_INSTANCE.db.get().unwrap())
+                .await?
+                .unwrap_or_default()
+        )
+    );
 }
 
 pub async fn get_settings_certificate() -> RspResult<HttpResponse> {

@@ -2,7 +2,7 @@ use std::{cmp::max, net::SocketAddr};
 
 use actix_cloud::{
     chrono::Utc,
-    tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver},
+    tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel},
 };
 use ecies::SecretKey;
 use itertools::Itertools;
@@ -10,19 +10,19 @@ use miniz_oxide::deflate::compress_to_vec;
 use once_cell::sync::Lazy;
 use serde_json::Value;
 use skynet_api::{
+    HyUuid, Result,
     ffi_rpc::{self, async_trait, bincode, ffi_rpc_macro::plugin_impl_trait, registry::Registry},
     sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, Set},
     service::{SError, SResult},
     viewer::settings::SettingViewer,
-    HyUuid, Result,
 };
 use skynet_api_monitor::{
-    entity::agents, message::Data, semver::Version, viewer::agents::AgentViewer, Agent,
-    AgentCommand, AgentFile, AgentStatus, CommandKillMessage, CommandReqMessage, FileReqMessage,
-    InfoMessage, QuitMessage, StatusRspMessage, ID,
+    Agent, AgentCommand, AgentFile, AgentStatus, CommandKillMessage, CommandReqMessage,
+    FileReqMessage, ID, InfoMessage, QuitMessage, StatusRspMessage, entity::agents, message::Data,
+    semver::Version, viewer::agents::AgentViewer,
 };
 
-use crate::{Plugin, PLUGIN_INSTANCE};
+use crate::{PLUGIN_INSTANCE, Plugin};
 
 static SETTING_ADDRESS: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.address"));
 static SETTING_CERTIFICATE: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.certificate"));

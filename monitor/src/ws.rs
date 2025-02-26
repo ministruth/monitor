@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use actix_cloud::actix_web::{web, HttpResponse};
+use actix_cloud::actix_web::{HttpResponse, web};
 use bytes::Bytes;
 use skynet_api::{
-    anyhow::anyhow, bail, ffi_rpc::registry::Registry, plugin::WSMessage, request::Request,
-    service::SKYNET_SERVICE, tracing::debug, HyUuid, Result,
+    HyUuid, Result, anyhow::anyhow, bail, ffi_rpc::registry::Registry, plugin::WSMessage,
+    request::Request, service::SKYNET_SERVICE, tracing::debug,
 };
 use skynet_api_monitor::{
-    frontend_message::Data, message, prost::Message as _, FrontendMessage, ShellDisconnectMessage,
-    ShellErrorMessage,
+    FrontendMessage, ShellDisconnectMessage, ShellErrorMessage, frontend_message::Data, message,
+    prost::Message as _,
 };
 
 use crate::PLUGIN_INSTANCE;

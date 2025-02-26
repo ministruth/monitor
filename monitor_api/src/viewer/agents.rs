@@ -1,16 +1,15 @@
 use skynet_api::{
-    anyhow,
+    HyUuid, Result, anyhow,
     hyuuid::uuids2strings,
     request::Condition,
     sea_orm::{
         self, ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
         QueryFilter, Set, Unchanged,
     },
-    HyUuid, Result,
 };
 use skynet_macro::default_viewer;
 
-use crate::{entity::agents, InfoMessage};
+use crate::{InfoMessage, entity::agents};
 
 pub struct AgentViewer;
 

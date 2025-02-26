@@ -1,3 +1,11 @@
+# v0.7.1
+## Changes
+1. Update rust 2024.
+
+# frontend-v0.2.6
+## Changes
+1. Dependency upgrade.
+
 # v0.7.0
 ## Changes
 1. Update `skynet_api` version.

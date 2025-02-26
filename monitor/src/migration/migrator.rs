@@ -1,9 +1,9 @@
-use crate::{migration::m20230101_000001_create_table, ID};
+use crate::{ID, migration::m20230101_000001_create_table};
 use actix_cloud::async_trait;
 use sea_orm_migration::{MigrationTrait, MigratorTrait};
 use skynet_api::sea_orm::{
-    sea_query::{types, Alias, IntoIden},
     DynIden,
+    sea_query::{Alias, IntoIden, types},
 };
 
 pub struct Migrator;
