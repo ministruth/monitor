@@ -4,7 +4,7 @@ use std::time::Duration;
 use actix_cloud::{
     actix_web::{HttpResponse, web::Path},
     response::{JsonResponse, RspResult},
-    tokio::time::sleep,
+    tokio::{spawn, time::sleep},
     tracing::{error, info},
 };
 use actix_web_validator::{Json, QsQuery};
@@ -254,16 +254,24 @@ pub async fn get_settings() -> RspResult<JsonResponse> {
         running: bool,
         shell: Vec<String>,
         address: String,
-        timeout: u32,
+        msg_timeout: u32,
+        alert_timeout: u32,
     }
 
     let db = PLUGIN_INSTANCE.db.get().unwrap();
-    finish!(JsonResponse::new(MonitorResponse::Success).json(Rsp {
-        running: PLUGIN_INSTANCE.server.is_running(),
-        shell: Plugin::get_setting_shell(db).await?.unwrap_or_default(),
-        address: Plugin::get_setting_address(db).await?.unwrap_or_default(),
-        timeout: Plugin::get_setting_timeout(db).await?.unwrap_or_default()
-    }));
+    finish!(
+        JsonResponse::new(MonitorResponse::Success).json(Rsp {
+            running: PLUGIN_INSTANCE.server.is_running(),
+            shell: Plugin::get_setting_shell(db).await?.unwrap_or_default(),
+            address: Plugin::get_setting_address(db).await?.unwrap_or_default(),
+            msg_timeout: Plugin::get_setting_msg_timeout(db)
+                .await?
+                .unwrap_or_default(),
+            alert_timeout: Plugin::get_setting_alert_timeout(db)
+                .await?
+                .unwrap_or_default(),
+        })
+    );
 }
 
 pub async fn get_settings_shell() -> RspResult<JsonResponse> {
@@ -303,7 +311,7 @@ async fn restart_server(max_time: u32) -> Result<()> {
         sleep(Duration::from_secs(1)).await;
     }
     if !srv.is_running() {
-        PLUGIN_INSTANCE.runtime.spawn(async move {
+        spawn(async move {
             srv.start(&addr, key)
                 .await
                 .map_err(|e| error!(address=addr, error=%e, "Failed to start server"))
@@ -338,7 +346,7 @@ pub async fn post_server(param: Json<PostServerReq>) -> RspResult<JsonResponse> 
             let key = Plugin::get_setting_certificate(db)
                 .await?
                 .unwrap_or_default();
-            PLUGIN_INSTANCE.runtime.spawn(async move {
+            spawn(async move {
                 srv.start(&addr, key)
                     .await
                     .map_err(|e| error!(address=addr, error=%e, "Failed to start server"))
@@ -356,7 +364,8 @@ pub struct PutSettingsReq {
     #[validate(custom(function = "unique_validator"))]
     pub shell: Option<Vec<String>>,
     pub address: Option<String>,
-    pub timeout: Option<u32>,
+    pub msg_timeout: Option<u32>,
+    pub alert_timeout: Option<u32>,
 }
 
 pub async fn put_settings(param: Json<PutSettingsReq>) -> RspResult<JsonResponse> {
@@ -367,9 +376,13 @@ pub async fn put_settings(param: Json<PutSettingsReq>) -> RspResult<JsonResponse
     if let Some(x) = &param.address {
         Plugin::set_setting_address(&tx, x).await?;
     }
-    if let Some(x) = &param.timeout {
-        Plugin::set_setting_timeout(&tx, *x).await?;
-        *PLUGIN_INSTANCE.timeout.write() = *x;
+    if let Some(x) = &param.msg_timeout {
+        Plugin::set_setting_msg_timeout(&tx, *x).await?;
+        *PLUGIN_INSTANCE.msg_timeout.write() = *x;
+    }
+    if let Some(x) = &param.alert_timeout {
+        Plugin::set_setting_alert_timeout(&tx, *x).await?;
+        *PLUGIN_INSTANCE.alert_timeout.write() = *x;
     }
     tx.commit().await?;
 

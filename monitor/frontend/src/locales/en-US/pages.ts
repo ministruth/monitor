@@ -18,9 +18,12 @@ export default {
     'Regenerate public & private key pair, confirm?',
   'pages.config.setting.cert.regenerate.content':
     'All agents will be kicked and need the new public key to connect.',
-  'pages.config.setting.timeout.text': 'Alert Timeout:',
-  'pages.config.setting.timeout.tip':
-    'Timeout before sending alerts (seconds), 0 for disable',
+  'pages.config.setting.msg.timeout.text': 'Message Timeout:',
+  'pages.config.setting.msg.timeout.tip':
+    'Timeout when receiving messages (seconds), 0 for disable. Note that connection may be closed when agent report rate is longer than this.',
+  'pages.config.setting.alert.timeout.text': 'Alert Timeout:',
+  'pages.config.setting.alert.timeout.tip':
+    'Timeout before sending alerts when agent offline (seconds), 0 for disable.',
   'pages.config.setting.timeout.second': 'Seconds',
 
   'pages.config.agent.title': 'Agent',

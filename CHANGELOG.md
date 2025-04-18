@@ -1,3 +1,12 @@
+# frontend-v0.2.7
+## Changes
+1. Support message timeout.
+
+# v0.8.0
+## Changes
+1. Support message timeout.
+2. Update `skynet_api` version.
+
 # v0.7.1
 ## Changes
 1. Update rust 2024.

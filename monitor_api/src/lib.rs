@@ -3,8 +3,9 @@ use derivative::Derivative;
 use entity::agents;
 use enum_as_inner::EnumAsInner;
 use ffi_rpc::{
-    self, abi_stable, async_trait, bincode,
+    self, abi_stable, async_trait,
     ffi_rpc_macro::{self, plugin_api},
+    rmp_serde,
 };
 use message::Data;
 use semver::Version;

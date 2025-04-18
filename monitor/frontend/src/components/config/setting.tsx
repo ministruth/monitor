@@ -175,10 +175,20 @@ const SettingCard = () => {
       },
     },
     {
-      title: intl.get('pages.config.setting.timeout.text'),
-      dataIndex: 'timeout',
+      title: intl.get('pages.config.setting.msg.timeout.text'),
+      dataIndex: 'msg_timeout',
       valueType: 'digit',
-      tooltip: intl.get('pages.config.setting.timeout.tip'),
+      tooltip: intl.get('pages.config.setting.msg.timeout.tip'),
+      fieldProps: {
+        min: 0,
+        addonAfter: intl.get('pages.config.setting.timeout.second'),
+      },
+    },
+    {
+      title: intl.get('pages.config.setting.alert.timeout.text'),
+      dataIndex: 'alert_timeout',
+      valueType: 'digit',
+      tooltip: intl.get('pages.config.setting.alert.timeout.tip'),
       fieldProps: {
         min: 0,
         addonAfter: intl.get('pages.config.setting.timeout.second'),
@@ -194,7 +204,7 @@ const SettingCard = () => {
         layout="horizontal"
         labelAlign="left"
         request={request}
-        labelCol={{ span: 3 }}
+        labelCol={{ span: 4 }}
         ref={ref}
         formRef={formRef}
         columns={columns}

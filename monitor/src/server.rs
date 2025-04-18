@@ -16,7 +16,7 @@ use actix_cloud::{
             broadcast::{Receiver, Sender, channel},
             mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
         },
-        time::sleep,
+        time::{sleep, timeout},
     },
     tracing::{Instrument, Span, debug, error, field, info, info_span, warn},
 };
@@ -214,6 +214,17 @@ impl Frame {
                 })
             } else {
                 bail!("Invalid handshake data");
+            }
+        }
+    }
+
+    pub async fn read_msg_timeout(&mut self, sec: u32) -> Result<Message> {
+        if sec == 0 {
+            self.read_msg().await
+        } else {
+            match timeout(Duration::from_secs(sec.into()), self.read_msg()).await {
+                Ok(x) => x,
+                Err(_) => Err(anyhow!("Read message timeout")),
             }
         }
     }
@@ -460,7 +471,7 @@ impl Handler {
         let mut frame = Frame::new(stream, key);
         loop {
             select! {
-                msg = frame.read_msg() => {
+                msg = frame.read_msg_timeout(*PLUGIN_INSTANCE.msg_timeout.read()) => {
                     match msg {
                         Ok(msg) => {
                             if self.aid.is_none() {
@@ -570,7 +581,7 @@ impl Listener {
             select! {
                 _ = self.alert_clock.tick() => {
                     let now = Utc::now().timestamp_millis();
-                    let timeout = *PLUGIN_INSTANCE.timeout.read();
+                    let timeout = *PLUGIN_INSTANCE.alert_timeout.read();
                     if timeout != 0 {
                         for i in &PLUGIN_INSTANCE.agent {
                             if let Some(x) = i.last_rsp {

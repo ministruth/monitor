@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 use serde_json::Value;
 use skynet_api::{
     HyUuid, Result,
-    ffi_rpc::{self, async_trait, bincode, ffi_rpc_macro::plugin_impl_trait, registry::Registry},
+    ffi_rpc::{self, async_trait, ffi_rpc_macro::plugin_impl_trait, registry::Registry, rmp_serde},
     sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, Set},
     service::{SError, SResult},
     viewer::settings::SettingViewer,
@@ -27,7 +27,8 @@ use crate::{PLUGIN_INSTANCE, Plugin};
 static SETTING_ADDRESS: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.address"));
 static SETTING_CERTIFICATE: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.certificate"));
 static SETTING_SHELL: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.shell"));
-static SETTING_TIMEOUT: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.timeout"));
+static SETTING_MSG_TIMEOUT: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.msg.timeout"));
+static SETTING_ALERT_TIMEOUT: Lazy<String> = Lazy::new(|| format!("plugin.{ID}.alert.timeout"));
 
 #[plugin_impl_trait]
 impl skynet_api_monitor::Service for Plugin {
@@ -334,11 +335,23 @@ impl Plugin {
         Ok(None)
     }
 
-    pub async fn get_setting_timeout<C>(db: &C) -> Result<Option<u32>>
+    pub async fn get_setting_msg_timeout<C>(db: &C) -> Result<Option<u32>>
     where
         C: ConnectionTrait,
     {
-        let x = SettingViewer::get(db, &SETTING_TIMEOUT).await?;
+        let x = SettingViewer::get(db, &SETTING_MSG_TIMEOUT).await?;
+        if let Some(x) = x {
+            Ok(Some(x.parse()?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn get_setting_alert_timeout<C>(db: &C) -> Result<Option<u32>>
+    where
+        C: ConnectionTrait,
+    {
+        let x = SettingViewer::get(db, &SETTING_ALERT_TIMEOUT).await?;
         if let Some(x) = x {
             Ok(Some(x.parse()?))
         } else {
@@ -358,8 +371,12 @@ impl Plugin {
         SettingViewer::set(db, &SETTING_SHELL, &serde_json::to_string(&shell_prog)?).await
     }
 
-    pub async fn set_setting_timeout(db: &DatabaseTransaction, timeout: u32) -> Result<()> {
-        SettingViewer::set(db, &SETTING_TIMEOUT, &timeout.to_string()).await
+    pub async fn set_setting_msg_timeout(db: &DatabaseTransaction, timeout: u32) -> Result<()> {
+        SettingViewer::set(db, &SETTING_MSG_TIMEOUT, &timeout.to_string()).await
+    }
+
+    pub async fn set_setting_alert_timeout(db: &DatabaseTransaction, timeout: u32) -> Result<()> {
+        SettingViewer::set(db, &SETTING_ALERT_TIMEOUT, &timeout.to_string()).await
     }
 
     pub async fn init_agent(&self, db: &DatabaseTransaction) -> Result<()> {
